@@ -3,9 +3,7 @@ name: NotiKrypto
 on:
   workflow_dispatch:
 
-  schedule:
-    - cron: "7,17,27,37,47,57 * * * *"
-
+  
 jobs:
   publicar:
     runs-on: ubuntu-latest
