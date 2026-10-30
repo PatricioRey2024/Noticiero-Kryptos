@@ -1,0 +1,27 @@
+name: Diagnóstico Telegram
+
+on:
+  workflow_dispatch:
+
+jobs:
+  diagnostico:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Consultar mensajes recibidos
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        run: |
+          response=$(curl --fail --silent --show-error \
+            "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getUpdates")
+
+          echo "$response" | jq '
+            .result[] |
+            {
+              update_id,
+              chat_id: (.message.chat.id // .channel_post.chat.id),
+              chat_name: (.message.chat.title // .channel_post.chat.title),
+              topic_id: (.message.message_thread_id // .channel_post.message_thread_id),
+              text: (.message.text // .channel_post.text)
+            }
+          '
