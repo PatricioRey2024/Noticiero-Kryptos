@@ -106,9 +106,13 @@ def read_coinbase_incidents():
                 "title": incident_name,
                 "link": shortlink or "https://status.coinbase.com/",
                 "published": updated_at,
-                "details": details,
+                            "details": details,
             }
         )
+
+    print(
+        f"Coinbase Status: {len(incidents)} incidentes abiertos encontrados."
+    )
 
     return incidents
 
