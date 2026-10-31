@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import unicodedata
 import time
 import urllib.error
 import urllib.parse
@@ -255,9 +256,45 @@ def read_coinbase_incidents():
     return incidents
 
 
+def normalize_binance_title(title):
+    normalized = unicodedata.normalize(
+        "NFKD",
+        title,
+    )
+
+    normalized = "".join(
+        character
+        for character in normalized
+        if not unicodedata.combining(character)
+    )
+
+    normalized = normalized.lower()
+    normalized = re.sub(r"[^a-z0-9]+", " ", normalized)
+    normalized = re.sub(r"\s+", " ", normalized)
+
+    return normalized.strip()
+
+
+def resolve_binance_url(url, headers):
+    request = urllib.request.Request(
+        url,
+        headers=headers,
+    )
+
+    try:
+        with urllib.request.urlopen(
+            request,
+            timeout=20,
+        ) as response:
+            return response.geturl()
+
+    except Exception:
+        return url
+
+
 def read_binance_news():
     news = []
-    seen_ids = set()
+    seen_canonical_ids = set()
 
     headers = {
         "User-Agent": os.environ["SEC_USER_AGENT"],
@@ -306,26 +343,41 @@ def read_binance_news():
                 or title
             )
 
-            if article_id in seen_ids:
-                continue
-
-            seen_ids.add(article_id)
-
             code = article.get("code", "")
             short_link = article.get("shortLink", "")
 
             if short_link:
-                link = short_link
+                article_link = short_link
             elif code:
-                link = (
+                article_link = (
                     "https://www.binance.com/en/support/"
                     f"announcement/{code}"
                 )
             else:
-                link = (
+                article_link = (
                     "https://www.binance.com/en/support/"
                     "announcement"
                 )
+
+            resolved_link = resolve_binance_url(
+                article_link,
+                headers,
+            )
+
+            normalized_title = normalize_binance_title(
+                title
+            )
+
+            canonical_value = (
+                f"{resolved_link}|{normalized_title}"
+            )
+
+            canonical_id = f"binance:{canonical_value}"
+
+            if canonical_id in seen_canonical_ids:
+                continue
+
+            seen_canonical_ids.add(canonical_id)
 
             published = (
                 article.get("releaseDate")
@@ -366,10 +418,13 @@ def read_binance_news():
 
             news.append(
                 {
-                    "id": f"binance:{article_id}",
+                    "id": canonical_id,
+                    "legacy_ids": [
+                        f"binance:{article_id}",
+                    ],
                     "source": "Binance",
                     "title": title,
-                    "link": link,
+                    "link": resolved_link,
                     "published": published,
                     "details": details,
                 }
@@ -380,7 +435,8 @@ def read_binance_news():
             )
 
     print(
-        f"Binance: {len(news)} anuncios relevantes encontrados."
+        f"Binance: {len(news)} "
+        "anuncios relevantes encontrados."
     )
 
     return news
