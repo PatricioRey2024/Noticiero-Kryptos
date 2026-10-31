@@ -12,7 +12,7 @@ def read_latest_sec_news():
     request = urllib.request.Request(
         SEC_RSS_URL,
         headers={
-            "User-Agent": "NotiKrypto/0.1 (GitHub: PatricioRey2024)",
+            "User-Agent": os.environ["SEC_USER_AGENT"],
             "Accept": "application/rss+xml, application/xml",
         },
     )
