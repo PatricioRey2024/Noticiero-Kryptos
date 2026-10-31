@@ -1,9 +1,9 @@
-import time
 import json
 import os
+import time
+import urllib.error
 import urllib.parse
 import urllib.request
-import urllib.error
 import xml.etree.ElementTree as ET
 from email.utils import parsedate_to_datetime
 
@@ -23,26 +23,9 @@ def http_get_json(url, headers=None):
         headers=headers or {},
     )
 
-        result = None
+    with urllib.request.urlopen(request, timeout=30) as response:
+        return json.loads(response.read().decode("utf-8"))
 
-    for attempt in range(3):
-        try:
-            with urllib.request.urlopen(request, timeout=60) as response:
-                result = json.loads(response.read().decode("utf-8"))
-            break
-        except urllib.error.HTTPError as error:
-            if error.code != 503 or attempt == 2:
-                raise
-
-            wait_seconds = 5 * (attempt + 1)
-            print(
-                f"Gemini no está disponible temporalmente. "
-                f"Reintento en {wait_seconds} segundos."
-            )
-            time.sleep(wait_seconds)
-
-    if result is None:
-        raise RuntimeError("Gemini no devolvió una respuesta.")
 
 def read_federal_reserve_news():
     request = urllib.request.Request(
@@ -274,8 +257,26 @@ Reglas editoriales:
         method="POST",
     )
 
-    with urllib.request.urlopen(request, timeout=60) as response:
-        result = json.loads(response.read().decode("utf-8"))
+    result = None
+
+    for attempt in range(3):
+        try:
+            with urllib.request.urlopen(request, timeout=60) as response:
+                result = json.loads(response.read().decode("utf-8"))
+            break
+        except urllib.error.HTTPError as error:
+            if error.code != 503 or attempt == 2:
+                raise
+
+            wait_seconds = 5 * (attempt + 1)
+            print(
+                "Gemini no está disponible temporalmente. "
+                f"Reintento en {wait_seconds} segundos."
+            )
+            time.sleep(wait_seconds)
+
+    if result is None:
+        raise RuntimeError("Gemini no devolvió una respuesta.")
 
     candidates = result.get("candidates", [])
 
