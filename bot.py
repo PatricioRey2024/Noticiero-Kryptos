@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import time
 import urllib.error
 import urllib.parse
@@ -14,6 +15,46 @@ FED_RSS_URL = "https://www.federalreserve.gov/feeds/press_all.xml"
 COINBASE_INCIDENTS_URL = (
     "https://status.coinbase.com/api/v2/incidents/unresolved.json"
 )
+
+BINANCE_ANNOUNCEMENTS_URL = (
+    "https://www.binance.com/bapi/composite/v1/public/"
+    "cms/article/catalog/list/query"
+)
+
+BINANCE_CATALOG_IDS = [
+    49,
+    161,
+]
+
+BINANCE_KEYWORDS = [
+    "security",
+    "incident",
+    "hack",
+    "hacked",
+    "unauthorized",
+    "withdrawal",
+    "withdrawals",
+    "deposit",
+    "deposits",
+    "suspend",
+    "suspended",
+    "suspension",
+    "security incident",
+    "service disruption",
+    "maintenance",
+    "funds",
+    "stolen",
+    "breach",
+    "exploit",
+    "wallet",
+    "retiro",
+    "retiros",
+    "depósito",
+    "depósitos",
+    "seguridad",
+    "incidente",
+    "hackeo",
+]
 
 BLS_FEEDS = [
     (
@@ -59,7 +100,27 @@ def parse_news_datetime(value):
                 value.replace("Z", "+00:00")
             )
         except ValueError:
-            return None
+            parsed = None
+
+    if parsed is None:
+        match = re.search(
+            r"(20\d{2})[-/](\d{2})[-/](\d{2})",
+            value,
+        )
+
+        if match:
+            try:
+                parsed = datetime(
+                    int(match.group(1)),
+                    int(match.group(2)),
+                    int(match.group(3)),
+                    tzinfo=timezone.utc,
+                )
+            except ValueError:
+                parsed = None
+
+    if parsed is None:
+        return None
 
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=timezone.utc)
@@ -71,7 +132,7 @@ def is_recent_news(published):
     parsed = parse_news_datetime(published)
 
     if parsed is None:
-        return True
+        return False
 
     now = datetime.now(timezone.utc)
     age = now - parsed
@@ -192,6 +253,137 @@ def read_coinbase_incidents():
     )
 
     return incidents
+
+
+def read_binance_news():
+    news = []
+    seen_ids = set()
+
+    headers = {
+        "User-Agent": os.environ["SEC_USER_AGENT"],
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+    }
+
+    for catalog_id in BINANCE_CATALOG_IDS:
+        query = urllib.parse.urlencode(
+            {
+                "catalogId": catalog_id,
+                "pageNo": 1,
+                "pageSize": 20,
+            }
+        )
+
+        url = f"{BINANCE_ANNOUNCEMENTS_URL}?{query}"
+
+        data = http_get_json(
+            url,
+            headers=headers,
+        )
+
+        response_data = data.get("data") or {}
+        articles = response_data.get("articles") or []
+
+        for article in articles:
+            title = (
+                article.get("title")
+                or "Anuncio de Binance"
+            ).strip()
+
+            title_lower = title.lower()
+
+            relevant = any(
+                keyword in title_lower
+                for keyword in BINANCE_KEYWORDS
+            )
+
+            if not relevant:
+                continue
+
+            article_id = str(
+                article.get("id")
+                or article.get("code")
+                or title
+            )
+
+            if article_id in seen_ids:
+                continue
+
+            seen_ids.add(article_id)
+
+            code = article.get("code", "")
+            short_link = article.get("shortLink", "")
+
+            if short_link:
+                link = short_link
+            elif code:
+                link = (
+                    "https://www.binance.com/en/support/"
+                    f"announcement/{code}"
+                )
+            else:
+                link = (
+                    "https://www.binance.com/en/support/"
+                    "announcement"
+                )
+
+            published = (
+                article.get("releaseDate")
+                or article.get("publishDate")
+                or ""
+            )
+
+            if isinstance(published, (int, float)):
+                published = datetime.fromtimestamp(
+                    published / 1000,
+                    tz=timezone.utc,
+                ).isoformat()
+
+            if not published:
+                date_match = re.search(
+                    r"(20\d{2})[-/](\d{2})[-/](\d{2})",
+                    title,
+                )
+
+                if date_match:
+                    published = (
+                        f"{date_match.group(1)}-"
+                        f"{date_match.group(2)}-"
+                        f"{date_match.group(3)}"
+                    )
+
+            if not published:
+                print(
+                    "Binance: anuncio relevante sin fecha, "
+                    f"omitido: {title}"
+                )
+                continue
+
+            details = (
+                "Comunicado oficial publicado por Binance.\n"
+                f"Categoría consultada: {catalog_id}"
+            )
+
+            news.append(
+                {
+                    "id": f"binance:{article_id}",
+                    "source": "Binance",
+                    "title": title,
+                    "link": link,
+                    "published": published,
+                    "details": details,
+                }
+            )
+
+            print(
+                f"Binance detectado: {title}"
+            )
+
+    print(
+        f"Binance: {len(news)} anuncios relevantes encontrados."
+    )
+
+    return news
 
 
 def read_bls_news():
@@ -341,6 +533,18 @@ def collect_news():
         )
 
     try:
+        news.extend(read_binance_news())
+    except urllib.error.HTTPError as error:
+        print(
+            "Binance no disponible temporalmente: "
+            f"HTTP {error.code}"
+        )
+    except Exception as error:
+        print(
+            f"Error consultando Binance: {error}"
+        )
+
+    try:
         news.extend(read_bls_news())
     except urllib.error.HTTPError as error:
         print(
@@ -460,6 +664,9 @@ BAJA:
 DESCARTAR:
 - información rutinaria;
 - promociones;
+- listados;
+- airdrops;
+- competencias;
 - eventos menores;
 - información sin impacto financiero identificable.
 
@@ -621,6 +828,12 @@ def build_message(news, analysis):
             "Comunicado oficial de Coinbase Status.\n\n"
         )
 
+    if news["source"] == "Binance":
+        company_notice = (
+            "⚖️ Estado de la información\n\n"
+            "Comunicado oficial de Binance.\n\n"
+        )
+
     published = format_published_date(
         news["published"]
     )
@@ -663,7 +876,8 @@ def main():
 
         if not is_recent_news(news["published"]):
             print(
-                f"{news['source']}: comunicado antiguo omitido. "
+                f"{news['source']}: comunicado antiguo o "
+                f"sin fecha válida omitido. "
                 f"Fecha: {news['published']}"
             )
 
