@@ -12,6 +12,27 @@ from email.utils import parsedate_to_datetime
 
 
 FED_RSS_URL = "https://www.federalreserve.gov/feeds/press_all.xml"
+TREASURY_RSS_URL = "https://home.treasury.gov/rss.xml"
+
+TREASURY_KEYWORDS = [
+    "sanctions",
+    "sanction",
+    "ofac",
+    "debt",
+    "liquidity",
+    "financial",
+    "finance",
+    "terrorist financing",
+    "money laundering",
+    "north korea",
+    "dprk",
+    "iran",
+    "russia",
+    "cyber",
+    "crypto",
+    "digital asset",
+    "virtual currency",
+]
 
 COINBASE_INCIDENTS_URL = (
     "https://status.coinbase.com/api/v2/incidents/unresolved.json"
@@ -197,6 +218,90 @@ def read_federal_reserve_news():
             "details": "",
         }
     ]
+
+def read_treasury_news():
+    request = urllib.request.Request(
+        TREASURY_RSS_URL,
+        headers={
+            "User-Agent": os.environ["SEC_USER_AGENT"],
+            "Accept": "application/rss+xml, application/xml",
+        },
+    )
+
+    with urllib.request.urlopen(
+        request,
+        timeout=30,
+    ) as response:
+        content = response.read()
+
+    root = ET.fromstring(content)
+    items = []
+
+    for element in root.iter():
+        tag_name = element.tag.split("}")[-1]
+
+        if tag_name == "item":
+            items.append(element)
+
+    for item in items:
+        title = item.findtext(
+            "title",
+            default="Sin título",
+        ).strip()
+
+        title_lower = title.lower()
+
+        description = item.findtext(
+            "description",
+            default="",
+        ).strip()
+
+        description_lower = description.lower()
+
+        relevant = any(
+            keyword in title_lower
+            or keyword in description_lower
+            for keyword in TREASURY_KEYWORDS
+        )
+
+        if not relevant:
+            continue
+
+        link = item.findtext(
+            "link",
+            default="",
+        ).strip()
+
+        published = item.findtext(
+            "pubDate",
+            default="",
+        ).strip()
+
+        if not link:
+            link = TREASURY_RSS_URL
+
+        news_id = f"treasury:{link or title}"
+
+        print(
+            f"Treasury detectado: {title}"
+        )
+
+        return [
+            {
+                "id": news_id,
+                "source": "U.S. Treasury",
+                "title": title,
+                "link": link,
+                "published": published,
+                "details": description,
+            }
+        ]
+
+    print(
+        "Treasury: no se encontró un comunicado relevante."
+    )
+
+    return []
 
 
 def read_coinbase_incidents():
@@ -625,9 +730,21 @@ def collect_news():
         print(
             f"Error consultando Federal Reserve: {error}"
         )
+    try:
+        news.extend(read_treasury_news())
+    except urllib.error.HTTPError as error:
+        print(
+            "Treasury no disponible temporalmente: "
+            f"HTTP {error.code}"
+        )
+    except Exception as error:
+        print(
+            f"Error consultando Treasury: {error}"
+        )
 
     try:
         news.extend(read_coinbase_incidents())
+   
     except urllib.error.HTTPError as error:
         print(
             "Coinbase Status no disponible temporalmente: "
