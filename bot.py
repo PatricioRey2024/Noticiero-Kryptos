@@ -12,6 +12,16 @@ FED_RSS_URL = "https://www.federalreserve.gov/feeds/press_all.xml"
 COINBASE_INCIDENTS_URL = (
     "https://status.coinbase.com/api/v2/incidents/unresolved.json"
 )
+BLS_FEEDS = [
+    (
+        "BLS - Inflación CPI",
+        "https://www.bls.gov/feed/cpi.rss",
+    ),
+    (
+        "BLS - Empleo",
+        "https://www.bls.gov/feed/empsit.rss",
+    ),
+]
 STATE_FILE = "state.json"
 GEMINI_MODEL = "gemini-3.5-flash-lite"
 MAX_PROCESSED_IDS = 200
@@ -121,6 +131,58 @@ def read_coinbase_incidents():
     )
 
     return incidents
+    def read_bls_news():
+    news = []
+
+    headers = {
+        "User-Agent": os.environ["SEC_USER_AGENT"],
+        "Accept": "application/rss+xml, application/xml",
+    }
+
+    for source_name, feed_url in BLS_FEEDS:
+        request = urllib.request.Request(
+            feed_url,
+            headers=headers,
+        )
+
+        with urllib.request.urlopen(request, timeout=30) as response:
+            content = response.read()
+
+        root = ET.fromstring(content)
+        item = root.find("./channel/item")
+
+        if item is None:
+            continue
+
+        title = item.findtext("title", default="Sin título").strip()
+        link = item.findtext("link", default="").strip()
+        published = item.findtext("pubDate", default="").strip()
+        details = item.findtext("description", default="").strip()
+
+        if published:
+            try:
+                published = parsedate_to_datetime(published).strftime(
+                    "%Y-%m-%d %H:%M UTC"
+                )
+            except ValueError:
+                pass
+
+        news_id = f"bls:{link or title}"
+
+        news.append(
+            {
+                "id": news_id,
+                "source": source_name,
+                "title": title,
+                "link": link,
+                "published": published,
+                "details": details,
+            }
+        )
+
+    print(f"BLS: {len(news)} comunicados encontrados.")
+
+    return news
 
 
 def collect_news():
