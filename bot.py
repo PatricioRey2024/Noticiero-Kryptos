@@ -13,7 +13,7 @@ COINBASE_INCIDENTS_URL = (
     "https://status.coinbase.com/api/v2/incidents/unresolved.json"
 )
 STATE_FILE = "state.json"
-GEMINI_MODEL = "gemini-3.8-flash"
+GEMINI_MODEL = "gemini-3.5-flash-lite"
 MAX_PROCESSED_IDS = 200
 
 
