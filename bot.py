@@ -3,6 +3,7 @@ import os
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
+import urllib.error
 from email.utils import parsedate_to_datetime
 
 
@@ -113,8 +114,27 @@ def read_coinbase_incidents():
 
 def collect_news():
     news = []
-    news.extend(read_federal_reserve_news())
-    news.extend(read_coinbase_incidents())
+
+    try:
+        news.extend(read_federal_reserve_news())
+    except urllib.error.HTTPError as error:
+        print(
+            f"Federal Reserve no disponible temporalmente: "
+            f"HTTP {error.code}"
+        )
+    except Exception as error:
+        print(f"Error consultando Federal Reserve: {error}")
+
+    try:
+        news.extend(read_coinbase_incidents())
+    except urllib.error.HTTPError as error:
+        print(
+            f"Coinbase Status no disponible temporalmente: "
+            f"HTTP {error.code}"
+        )
+    except Exception as error:
+        print(f"Error consultando Coinbase Status: {error}")
+
     return news
 
 
