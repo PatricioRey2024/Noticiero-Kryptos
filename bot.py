@@ -162,37 +162,86 @@ def read_bls_news():
             content = response.read()
 
         root = ET.fromstring(content)
-        item = root.find("./channel/item")
 
-        if item is None:
+        entries = []
+
+        for element in root.iter():
+            tag_name = element.tag.split("}")[-1]
+
+            if tag_name in {"item", "entry"}:
+                entries.append(element)
+
+        if not entries:
+            print(f"{source_name}: no se encontró ningún comunicado.")
             continue
 
-        title = item.findtext(
-            "title",
-            default="Sin título",
-        ).strip()
+        item = entries[0]
 
-        link = item.findtext(
-            "link",
-            default="",
-        ).strip()
+        def get_text(element, names):
+            for name in names:
+                for child in element:
+                    child_name = child.tag.split("}")[-1]
 
-        published = item.findtext(
-            "pubDate",
-            default="",
-        ).strip()
+                    if child_name == name:
+                        text = child.text or ""
+                        return text.strip()
 
-        details = item.findtext(
-            "description",
-            default="",
-        ).strip()
+            return ""
 
-        if published:
+        title = get_text(
+            item,
+            ["title"],
+        )
+
+        published = get_text(
+            item,
+            [
+                "pubDate",
+                "published",
+                "updated",
+                "date",
+            ],
+        )
+
+        details = get_text(
+            item,
+            [
+                "description",
+                "summary",
+                "content",
+            ],
+        )
+
+        link = ""
+
+        for child in item:
+            child_name = child.tag.split("}")[-1]
+
+            if child_name == "link":
+                link = (
+                    child.attrib.get("href", "")
+                    or child.text
+                    or ""
+                ).strip()
+
+                if link:
+                    break
+
+        if not title:
+            title = "Sin título"
+
+        if not published:
+            published = "Fecha no disponible"
+
+        if not link:
+            link = feed_url
+
+        if published != "Fecha no disponible":
             try:
                 published = parsedate_to_datetime(
                     published
                 ).strftime("%Y-%m-%d %H:%M UTC")
-            except ValueError:
+            except (TypeError, ValueError):
                 pass
 
         news_id = f"bls:{link or title}"
@@ -207,6 +256,8 @@ def read_bls_news():
                 "details": details,
             }
         )
+
+        print(f"{source_name}: comunicado encontrado.")
 
     print(f"BLS: {len(news)} comunicados encontrados.")
 
