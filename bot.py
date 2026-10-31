@@ -372,7 +372,7 @@ def main():
         if news["id"] in state["processed_ids"]:
             continue
 
-                try:
+        try:
             analysis = analyze_news(news)
         except urllib.error.HTTPError as error:
             if error.code == 503:
