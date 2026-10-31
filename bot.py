@@ -208,6 +208,16 @@ def collect_news():
     except Exception as error:
         print(f"Error consultando Coinbase Status: {error}")
 
+    try:
+        news.extend(read_bls_news())
+    except urllib.error.HTTPError as error:
+        print(
+            f"BLS no disponible temporalmente: "
+            f"HTTP {error.code}"
+        )
+    except Exception as error:
+        print(f"Error consultando BLS: {error}")
+
     return news
 
 
