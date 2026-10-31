@@ -235,23 +235,22 @@ def read_treasury_news():
         content = response.read()
 
     root = ET.fromstring(content)
-    items = []
+    candidates = []
 
     for element in root.iter():
         tag_name = element.tag.split("}")[-1]
 
-        if tag_name == "item":
-            items.append(element)
+        if tag_name != "item":
+            continue
 
-    for item in items:
-        title = item.findtext(
+        title = element.findtext(
             "title",
             default="Sin título",
         ).strip()
 
         title_lower = title.lower()
 
-        description = item.findtext(
+        description = element.findtext(
             "description",
             default="",
         ).strip()
@@ -267,12 +266,12 @@ def read_treasury_news():
         if not relevant:
             continue
 
-        link = item.findtext(
+        link = element.findtext(
             "link",
             default="",
         ).strip()
 
-        published = item.findtext(
+        published = element.findtext(
             "pubDate",
             default="",
         ).strip()
@@ -280,28 +279,45 @@ def read_treasury_news():
         if not link:
             link = TREASURY_RSS_URL
 
-        news_id = f"treasury:{link or title}"
-
-        print(
-            f"Treasury detectado: {title}"
-        )
-
-        return [
+        candidates.append(
             {
-                "id": news_id,
+                "id": f"treasury:{link or title}",
                 "source": "U.S. Treasury",
                 "title": title,
                 "link": link,
                 "published": published,
                 "details": description,
             }
-        ]
+        )
 
-    print(
-        "Treasury: no se encontró un comunicado relevante."
+    if not candidates:
+        print(
+            "Treasury: no se encontró un comunicado relevante."
+        )
+        return []
+
+    def treasury_date(item):
+        parsed = parse_news_datetime(
+            item["published"]
+        )
+
+        if parsed is None:
+            return datetime.min.replace(
+                tzinfo=timezone.utc
+            )
+
+        return parsed
+
+    latest = max(
+        candidates,
+        key=treasury_date,
     )
 
-    return []
+    print(
+        f"Treasury detectado: {latest['title']}"
+    )
+
+    return [latest]
 
 
 def read_coinbase_incidents():
