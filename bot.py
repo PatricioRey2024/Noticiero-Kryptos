@@ -6,14 +6,28 @@ import xml.etree.ElementTree as ET
 from email.utils import parsedate_to_datetime
 
 
-RSS_URL = "https://www.federalreserve.gov/feeds/press_all.xml"
+FED_RSS_URL = "https://www.federalreserve.gov/feeds/press_all.xml"
+COINBASE_INCIDENTS_URL = (
+    "https://status.coinbase.com/api/v2/incidents/unresolved.json"
+)
 STATE_FILE = "state.json"
 GEMINI_MODEL = "gemini-3.1-flash-lite"
+MAX_PROCESSED_IDS = 200
 
 
-def read_latest_news():
+def http_get_json(url, headers=None):
     request = urllib.request.Request(
-        RSS_URL,
+        url,
+        headers=headers or {},
+    )
+
+    with urllib.request.urlopen(request, timeout=30) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def read_federal_reserve_news():
+    request = urllib.request.Request(
+        FED_RSS_URL,
         headers={
             "User-Agent": os.environ["SEC_USER_AGENT"],
             "Accept": "application/rss+xml, application/xml",
@@ -27,7 +41,7 @@ def read_latest_news():
     item = root.find("./channel/item")
 
     if item is None:
-        raise RuntimeError("El RSS no devolvió ninguna noticia.")
+        return []
 
     title = item.findtext("title", default="Sin título").strip()
     link = item.findtext("link", default="").strip()
@@ -41,31 +55,82 @@ def read_latest_news():
         except ValueError:
             pass
 
-    news_id = link or f"{title}|{published}"
+    news_id = f"federal_reserve:{link or title}"
 
-    return {
-        "id": news_id,
-        "title": title,
-        "link": link,
-        "published": published,
-    }
+    return [
+        {
+            "id": news_id,
+            "source": "Federal Reserve",
+            "title": title,
+            "link": link,
+            "published": published,
+            "details": "",
+        }
+    ]
+
+
+def read_coinbase_incidents():
+    data = http_get_json(COINBASE_INCIDENTS_URL)
+    incidents = []
+
+    for incident in data.get("incidents", []):
+        incident_id = incident.get("id", "")
+        incident_name = incident.get("name", "Incidente en Coinbase")
+        incident_status = incident.get("status", "")
+        incident_impact = incident.get("impact", "")
+        updates = incident.get("incident_updates", [])
+
+        if not incident_id or not updates:
+            continue
+
+        latest_update = updates[0]
+        update_id = latest_update.get("id", "")
+        update_body = latest_update.get("body", "")
+        updated_at = latest_update.get("updated_at", "")
+        shortlink = incident.get("shortlink", "")
+
+        news_id = f"coinbase:{incident_id}:{update_id}"
+
+        details = (
+            f"Estado: {incident_status}\n"
+            f"Impacto declarado: {incident_impact}\n"
+            f"Actualización: {update_body}"
+        )
+
+        incidents.append(
+            {
+                "id": news_id,
+                "source": "Coinbase Status",
+                "title": incident_name,
+                "link": shortlink or "https://status.coinbase.com/",
+                "published": updated_at,
+                "details": details,
+            }
+        )
+
+    return incidents
+
+
+def collect_news():
+    news = []
+    news.extend(read_federal_reserve_news())
+    news.extend(read_coinbase_incidents())
+    return news
 
 
 def load_state():
     if not os.path.exists(STATE_FILE):
-        return {}
+        return {"processed_ids": []}
 
     with open(STATE_FILE, "r", encoding="utf-8") as file:
-        return json.load(file)
+        state = json.load(file)
+
+    state.setdefault("processed_ids", [])
+    return state
 
 
-def save_state(news, relevance):
-    state = {
-        "last_news_id": news["id"],
-        "last_title": news["title"],
-        "last_published": news["published"],
-        "last_relevance": relevance,
-    }
+def save_state(state):
+    state["processed_ids"] = state["processed_ids"][-MAX_PROCESSED_IDS:]
 
     with open(STATE_FILE, "w", encoding="utf-8") as file:
         json.dump(state, file, ensure_ascii=False, indent=2)
@@ -81,16 +146,19 @@ def analyze_news(news):
     )
 
     prompt = f"""
-Analizá este comunicado oficial para un noticiero financiero y cripto.
+Analizá esta información para un noticiero financiero y cripto.
 
-Título original:
+Fuente:
+{news["source"]}
+
+Título:
 {news["title"]}
 
 Fecha:
 {news["published"]}
 
-Fuente:
-Federal Reserve
+Detalles:
+{news["details"]}
 
 Enlace:
 {news["link"]}
@@ -98,48 +166,51 @@ Enlace:
 Devolvé únicamente un JSON válido con estos campos:
 {{
   "relevance": "ALTA, MEDIA, BAJA o DESCARTAR",
-  "title_es": "título traducido al español",
+  "title_es": "título formal en español",
   "summary_es": "resumen formal y breve en español",
   "impact_es": "impacto potencial en el mercado"
 }}
 
-Criterios de relevancia:
+Criterios:
 
 ALTA:
-- decisión de tasas de interés;
-- inflación o empleo con efecto sobre política monetaria;
+- interrupción grave;
+- retiros o depósitos suspendidos;
+- hackeo o incidente de seguridad;
 - crisis de liquidez;
-- quiebra o rescate bancario;
-- riesgo para la estabilidad financiera;
-- regulación importante;
-- medida con posible impacto amplio en mercados financieros o criptomonedas.
+- decisión importante de tasas;
+- sanción relevante;
+- riesgo financiero amplio;
+- hecho con posible impacto significativo en criptomonedas o mercados.
 
 MEDIA:
-- medida relevante para un sector financiero;
-- cambio regulatorio de alcance limitado;
-- acontecimiento que pueda afectar a una entidad o grupo de activos;
-- información que merezca seguimiento del mercado.
+- incidente operativo relevante;
+- cambio regulatorio sectorial;
+- problema que afecte a una parte importante de los usuarios;
+- hecho que merezca seguimiento del mercado.
 
 BAJA:
+- mantenimiento menor;
+- incidente limitado;
 - decisión administrativa puntual;
-- aprobación rutinaria de una entidad;
-- anuncio institucional sin efecto amplio;
-- publicación de interés limitado.
+- comunicado sin efecto amplio.
 
 DESCARTAR:
-- información educativa;
+- información rutinaria;
+- promociones;
 - eventos menores;
-- comunicados rutinarios;
-- publicaciones sin impacto financiero identificable.
+- información sin impacto financiero identificable.
 
-Reglas:
-- No clasifiques una noticia como relevante solo porque mencione a un banco o a la Reserva Federal.
-- No inventes datos.
-- Si no existe un impacto directo sobre criptomonedas, indicá esa limitación claramente.
-- Usá español formal y natural.
+Reglas editoriales:
+- Escribí en español formal y natural.
 - No uses la frase "por qué importa".
+- Usá el encabezado conceptual "Impacto potencial en el mercado".
+- No inventes datos.
+- No presentes una declaración de una empresa como una confirmación independiente.
+- Si la fuente es una empresa involucrada, indicá que se trata de un comunicado oficial de esa entidad.
+- Si no hay impacto directo sobre criptomonedas, indicá esa limitación.
 - No incluyas emojis dentro del JSON.
-- Devolvé únicamente el JSON, sin Markdown ni explicaciones.
+- Devolvé únicamente el JSON.
 """
 
     payload = {
@@ -221,23 +292,16 @@ def send_message(text):
         raise RuntimeError(result)
 
 
-def main():
-    news = read_latest_news()
-    state = load_state()
+def build_message(news, analysis):
+    company_notice = ""
 
-    if state.get("last_news_id") == news["id"]:
-        print("La noticia más reciente ya fue procesada.")
-        return
+    if news["source"] == "Coinbase Status":
+        company_notice = (
+            "⚖️ Estado de la información\n\n"
+            "Comunicado oficial de Coinbase Status.\n\n"
+        )
 
-    analysis = analyze_news(news)
-    relevance = analysis["relevance"]
-
-    if relevance in {"BAJA", "DESCARTAR"}:
-        save_state(news, relevance)
-        print(f"Noticia no publicada. Nivel de relevancia: {relevance}.")
-        return
-
-    message = (
+    return (
         "🔴 COMUNICADO OFICIAL\n\n"
         "📰 Resumen del acontecimiento\n\n"
         f"{analysis['title_es']}\n\n"
@@ -245,17 +309,54 @@ def main():
         f"{analysis['summary_es']}\n\n"
         "📊 Impacto potencial en el mercado\n\n"
         f"{analysis['impact_es']}\n\n"
+        f"{company_notice}"
         "🕐 Fecha de publicación\n\n"
         f"{news['published']}\n\n"
         "🏛️ Fuente\n\n"
-        "Federal Reserve\n\n"
+        f"{news['source']}\n\n"
         "🔗 Documento oficial\n\n"
         f"{news['link']}"
     )
 
-    send_message(message)
-    save_state(news, relevance)
-    print(f"Nueva noticia publicada. Nivel de relevancia: {relevance}.")
+
+def main():
+    state = load_state()
+    news_items = collect_news()
+
+    if not news_items:
+        print("No se encontraron noticias o incidentes nuevos.")
+        return
+
+    processed_any = False
+
+    for news in news_items:
+        if news["id"] in state["processed_ids"]:
+            continue
+
+        analysis = analyze_news(news)
+        relevance = analysis["relevance"]
+
+        state["processed_ids"].append(news["id"])
+        save_state(state)
+        processed_any = True
+
+        if relevance in {"BAJA", "DESCARTAR"}:
+            print(
+                f"{news['source']}: noticia no publicada. "
+                f"Nivel de relevancia: {relevance}."
+            )
+            continue
+
+        message = build_message(news, analysis)
+        send_message(message)
+
+        print(
+            f"{news['source']}: noticia publicada. "
+            f"Nivel de relevancia: {relevance}."
+        )
+
+    if not processed_any:
+        print("No hay noticias nuevas para procesar.")
 
 
 if __name__ == "__main__":
