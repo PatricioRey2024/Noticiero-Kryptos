@@ -2,8 +2,8 @@ import json
 import os
 import urllib.parse
 import urllib.request
-import xml.etree.ElementTree as ET
 import urllib.error
+import xml.etree.ElementTree as ET
 from email.utils import parsedate_to_datetime
 
 
