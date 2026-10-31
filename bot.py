@@ -5,6 +5,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
+from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 
 
@@ -28,6 +29,7 @@ BLS_FEEDS = [
 STATE_FILE = "state.json"
 GEMINI_MODEL = "gemini-3.5-flash-lite"
 MAX_PROCESSED_IDS = 200
+MAX_NEWS_AGE_HOURS = 48
 
 
 def http_get_json(url, headers=None):
@@ -38,6 +40,54 @@ def http_get_json(url, headers=None):
 
     with urllib.request.urlopen(request, timeout=30) as response:
         return json.loads(response.read().decode("utf-8"))
+
+
+def parse_news_datetime(value):
+    if not value:
+        return None
+
+    value = value.strip()
+
+    try:
+        parsed = parsedate_to_datetime(value)
+    except (TypeError, ValueError, IndexError):
+        parsed = None
+
+    if parsed is None:
+        try:
+            parsed = datetime.fromisoformat(
+                value.replace("Z", "+00:00")
+            )
+        except ValueError:
+            return None
+
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+
+    return parsed.astimezone(timezone.utc)
+
+
+def is_recent_news(published):
+    parsed = parse_news_datetime(published)
+
+    if parsed is None:
+        return True
+
+    now = datetime.now(timezone.utc)
+    age = now - parsed
+
+    return timedelta(0) <= age <= timedelta(
+        hours=MAX_NEWS_AGE_HOURS
+    )
+
+
+def format_published_date(published):
+    parsed = parse_news_datetime(published)
+
+    if parsed is None:
+        return published or "Fecha no disponible"
+
+    return parsed.strftime("%Y-%m-%d %H:%M UTC")
 
 
 def read_federal_reserve_news():
@@ -58,17 +108,20 @@ def read_federal_reserve_news():
     if item is None:
         return []
 
-    title = item.findtext("title", default="Sin título").strip()
-    link = item.findtext("link", default="").strip()
-    published = item.findtext("pubDate", default="").strip()
+    title = item.findtext(
+        "title",
+        default="Sin título",
+    ).strip()
 
-    if published:
-        try:
-            published = parsedate_to_datetime(published).strftime(
-                "%Y-%m-%d %H:%M UTC"
-            )
-        except ValueError:
-            pass
+    link = item.findtext(
+        "link",
+        default="",
+    ).strip()
+
+    published = item.findtext(
+        "pubDate",
+        default="",
+    ).strip()
 
     news_id = f"federal_reserve:{link or title}"
 
@@ -162,7 +215,6 @@ def read_bls_news():
             content = response.read()
 
         root = ET.fromstring(content)
-
         entries = []
 
         for element in root.iter():
@@ -172,19 +224,20 @@ def read_bls_news():
                 entries.append(element)
 
         if not entries:
-            print(f"{source_name}: no se encontró ningún comunicado.")
+            print(
+                f"{source_name}: "
+                "no se encontró ningún comunicado."
+            )
             continue
 
         item = entries[0]
 
         def get_text(element, names):
-            for name in names:
-                for child in element:
-                    child_name = child.tag.split("}")[-1]
+            for child in element:
+                child_name = child.tag.split("}")[-1]
 
-                    if child_name == name:
-                        text = child.text or ""
-                        return text.strip()
+                if child_name in names:
+                    return (child.text or "").strip()
 
             return ""
 
@@ -236,14 +289,6 @@ def read_bls_news():
         if not link:
             link = feed_url
 
-        if published != "Fecha no disponible":
-            try:
-                published = parsedate_to_datetime(
-                    published
-                ).strftime("%Y-%m-%d %H:%M UTC")
-            except (TypeError, ValueError):
-                pass
-
         news_id = f"bls:{link or title}"
 
         news.append(
@@ -257,9 +302,13 @@ def read_bls_news():
             }
         )
 
-        print(f"{source_name}: comunicado encontrado.")
+        print(
+            f"{source_name}: comunicado encontrado."
+        )
 
-    print(f"BLS: {len(news)} comunicados encontrados.")
+    print(
+        f"BLS: {len(news)} comunicados encontrados."
+    )
 
     return news
 
@@ -275,7 +324,9 @@ def collect_news():
             f"HTTP {error.code}"
         )
     except Exception as error:
-        print(f"Error consultando Federal Reserve: {error}")
+        print(
+            f"Error consultando Federal Reserve: {error}"
+        )
 
     try:
         news.extend(read_coinbase_incidents())
@@ -285,24 +336,30 @@ def collect_news():
             f"HTTP {error.code}"
         )
     except Exception as error:
-        print(f"Error consultando Coinbase Status: {error}")
+        print(
+            f"Error consultando Coinbase Status: {error}"
+        )
 
     try:
         news.extend(read_bls_news())
     except urllib.error.HTTPError as error:
         print(
-            "BLS no disponible temporalmente: "
+            f"BLS no disponible temporalmente: "
             f"HTTP {error.code}"
         )
     except Exception as error:
-        print(f"Error consultando BLS: {error}")
+        print(
+            f"Error consultando BLS: {error}"
+        )
 
     return news
 
 
 def load_state():
     if not os.path.exists(STATE_FILE):
-        return {"processed_ids": []}
+        return {
+            "processed_ids": []
+        }
 
     with open(
         STATE_FILE,
@@ -311,7 +368,10 @@ def load_state():
     ) as file:
         state = json.load(file)
 
-    state.setdefault("processed_ids", [])
+    state.setdefault(
+        "processed_ids",
+        [],
+    )
 
     return state
 
@@ -336,6 +396,7 @@ def save_state(state):
 
 def analyze_news(news):
     api_key = os.environ["GEMINI_API_KEY"]
+
     encoded_key = urllib.parse.quote(
         api_key,
         safe="",
@@ -471,7 +532,10 @@ Reglas editoriales:
             "Gemini no devolvió una respuesta."
         )
 
-    candidates = result.get("candidates", [])
+    candidates = result.get(
+        "candidates",
+        [],
+    )
 
     if not candidates:
         raise RuntimeError(
@@ -557,6 +621,10 @@ def build_message(news, analysis):
             "Comunicado oficial de Coinbase Status.\n\n"
         )
 
+    published = format_published_date(
+        news["published"]
+    )
+
     return (
         "🔴 COMUNICADO OFICIAL\n\n"
         "📰 Resumen del acontecimiento\n\n"
@@ -567,7 +635,7 @@ def build_message(news, analysis):
         f"{analysis['impact_es']}\n\n"
         f"{company_notice}"
         "🕐 Fecha de publicación\n\n"
-        f"{news['published']}\n\n"
+        f"{published}\n\n"
         "🏛️ Fuente\n\n"
         f"{news['source']}\n\n"
         "🔗 Documento oficial\n\n"
@@ -588,7 +656,20 @@ def main():
     processed_any = False
 
     for news in news_items:
-        if news["id"] in state["processed_ids"]:
+        news_id = news["id"]
+
+        if news_id in state["processed_ids"]:
+            continue
+
+        if not is_recent_news(news["published"]):
+            print(
+                f"{news['source']}: comunicado antiguo omitido. "
+                f"Fecha: {news['published']}"
+            )
+
+            state["processed_ids"].append(news_id)
+            save_state(state)
+            processed_any = True
             continue
 
         try:
@@ -606,7 +687,7 @@ def main():
 
         relevance = analysis["relevance"]
 
-        state["processed_ids"].append(news["id"])
+        state["processed_ids"].append(news_id)
         save_state(state)
         processed_any = True
 
@@ -633,7 +714,9 @@ def main():
         )
 
     if not processed_any:
-        print("No hay noticias nuevas para procesar.")
+        print(
+            "No hay noticias nuevas para procesar."
+        )
 
 
 if __name__ == "__main__":
