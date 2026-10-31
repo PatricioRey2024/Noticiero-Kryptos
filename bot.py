@@ -134,57 +134,57 @@ def read_coinbase_incidents():
 
     
     def read_bls_news():
-    news = []
-
-    headers = {
-        "User-Agent": os.environ["SEC_USER_AGENT"],
-        "Accept": "application/rss+xml, application/xml",
-    }
-
-    for source_name, feed_url in BLS_FEEDS:
-        request = urllib.request.Request(
-            feed_url,
-            headers=headers,
-        )
-
-        with urllib.request.urlopen(request, timeout=30) as response:
-            content = response.read()
-
-        root = ET.fromstring(content)
-        item = root.find("./channel/item")
-
-        if item is None:
-            continue
-
-        title = item.findtext("title", default="Sin título").strip()
-        link = item.findtext("link", default="").strip()
-        published = item.findtext("pubDate", default="").strip()
-        details = item.findtext("description", default="").strip()
-
-        if published:
-            try:
-                published = parsedate_to_datetime(published).strftime(
-                    "%Y-%m-%d %H:%M UTC"
-                )
-            except ValueError:
-                pass
-
-        news_id = f"bls:{link or title}"
-
-        news.append(
-            {
-                "id": news_id,
-                "source": source_name,
-                "title": title,
-                "link": link,
-                "published": published,
-                "details": details,
-            }
-        )
-
-    print(f"BLS: {len(news)} comunicados encontrados.")
-
-    return news
+        news = []
+    
+        headers = {
+            "User-Agent": os.environ["SEC_USER_AGENT"],
+            "Accept": "application/rss+xml, application/xml",
+        }
+    
+        for source_name, feed_url in BLS_FEEDS:
+            request = urllib.request.Request(
+                feed_url,
+                headers=headers,
+            )
+    
+            with urllib.request.urlopen(request, timeout=30) as response:
+                content = response.read()
+    
+            root = ET.fromstring(content)
+            item = root.find("./channel/item")
+    
+            if item is None:
+                continue
+    
+            title = item.findtext("title", default="Sin título").strip()
+            link = item.findtext("link", default="").strip()
+            published = item.findtext("pubDate", default="").strip()
+            details = item.findtext("description", default="").strip()
+    
+            if published:
+                try:
+                    published = parsedate_to_datetime(published).strftime(
+                        "%Y-%m-%d %H:%M UTC"
+                    )
+                except ValueError:
+                    pass
+    
+            news_id = f"bls:{link or title}"
+    
+            news.append(
+                {
+                    "id": news_id,
+                    "source": source_name,
+                    "title": title,
+                    "link": link,
+                    "published": published,
+                    "details": details,
+                }
+            )
+    
+        print(f"BLS: {len(news)} comunicados encontrados.")
+    
+        return news
 
 
 def collect_news():
