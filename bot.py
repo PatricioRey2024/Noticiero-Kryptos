@@ -59,18 +59,19 @@ def load_state():
         return json.load(file)
 
 
-def save_state(news):
+def save_state(news, relevance):
     state = {
         "last_news_id": news["id"],
         "last_title": news["title"],
         "last_published": news["published"],
+        "last_relevance": relevance,
     }
 
     with open(STATE_FILE, "w", encoding="utf-8") as file:
         json.dump(state, file, ensure_ascii=False, indent=2)
 
 
-def generate_spanish_content(news):
+def analyze_news(news):
     api_key = os.environ["GEMINI_API_KEY"]
     encoded_key = urllib.parse.quote(api_key, safe="")
 
@@ -80,7 +81,7 @@ def generate_spanish_content(news):
     )
 
     prompt = f"""
-Analizá únicamente este comunicado oficial y devolvé un JSON válido.
+Analizá este comunicado oficial para un noticiero financiero y cripto.
 
 Título original:
 {news["title"]}
@@ -94,21 +95,51 @@ Federal Reserve
 Enlace:
 {news["link"]}
 
-El JSON debe contener exactamente estos campos:
+Devolvé únicamente un JSON válido con estos campos:
 {{
+  "relevance": "ALTA, MEDIA, BAJA o DESCARTAR",
   "title_es": "título traducido al español",
   "summary_es": "resumen formal y breve en español",
   "impact_es": "impacto potencial en el mercado"
 }}
 
+Criterios de relevancia:
+
+ALTA:
+- decisión de tasas de interés;
+- inflación o empleo con efecto sobre política monetaria;
+- crisis de liquidez;
+- quiebra o rescate bancario;
+- riesgo para la estabilidad financiera;
+- regulación importante;
+- medida con posible impacto amplio en mercados financieros o criptomonedas.
+
+MEDIA:
+- medida relevante para un sector financiero;
+- cambio regulatorio de alcance limitado;
+- acontecimiento que pueda afectar a una entidad o grupo de activos;
+- información que merezca seguimiento del mercado.
+
+BAJA:
+- decisión administrativa puntual;
+- aprobación rutinaria de una entidad;
+- anuncio institucional sin efecto amplio;
+- publicación de interés limitado.
+
+DESCARTAR:
+- información educativa;
+- eventos menores;
+- comunicados rutinarios;
+- publicaciones sin impacto financiero identificable.
+
 Reglas:
-- Escribí en español formal y natural.
+- No clasifiques una noticia como relevante solo porque mencione a un banco o a la Reserva Federal.
 - No inventes datos.
-- No agregues información que no figure en el comunicado.
-- Si el hecho no tiene un impacto directo sobre criptomonedas, indicá claramente que no se observa un impacto directo con la información disponible.
-- No uses frases como "por qué importa".
+- Si no existe un impacto directo sobre criptomonedas, indicá esa limitación claramente.
+- Usá español formal y natural.
+- No uses la frase "por qué importa".
 - No incluyas emojis dentro del JSON.
-- Devolvé únicamente el JSON, sin Markdown ni explicaciones adicionales.
+- Devolvé únicamente el JSON, sin Markdown ni explicaciones.
 """
 
     payload = {
@@ -145,10 +176,20 @@ Reglas:
     generated_text = candidates[0]["content"]["parts"][0]["text"].strip()
     content = json.loads(generated_text)
 
-    required_fields = {"title_es", "summary_es", "impact_es"}
+    required_fields = {
+        "relevance",
+        "title_es",
+        "summary_es",
+        "impact_es",
+    }
 
     if not required_fields.issubset(content):
         raise RuntimeError("La respuesta de Gemini no tiene el formato esperado.")
+
+    content["relevance"] = content["relevance"].upper().strip()
+
+    if content["relevance"] not in {"ALTA", "MEDIA", "BAJA", "DESCARTAR"}:
+        raise RuntimeError("Gemini devolvió una clasificación no válida.")
 
     return content
 
@@ -185,19 +226,25 @@ def main():
     state = load_state()
 
     if state.get("last_news_id") == news["id"]:
-        print("La noticia más reciente ya fue enviada.")
+        print("La noticia más reciente ya fue procesada.")
         return
 
-    translated = generate_spanish_content(news)
+    analysis = analyze_news(news)
+    relevance = analysis["relevance"]
+
+    if relevance in {"BAJA", "DESCARTAR"}:
+        save_state(news, relevance)
+        print(f"Noticia no publicada. Nivel de relevancia: {relevance}.")
+        return
 
     message = (
         "🔴 COMUNICADO OFICIAL\n\n"
         "📰 Resumen del acontecimiento\n\n"
-        f"{translated['title_es']}\n\n"
+        f"{analysis['title_es']}\n\n"
         "📝 Síntesis\n\n"
-        f"{translated['summary_es']}\n\n"
+        f"{analysis['summary_es']}\n\n"
         "📊 Impacto potencial en el mercado\n\n"
-        f"{translated['impact_es']}\n\n"
+        f"{analysis['impact_es']}\n\n"
         "🕐 Fecha de publicación\n\n"
         f"{news['published']}\n\n"
         "🏛️ Fuente\n\n"
@@ -207,8 +254,8 @@ def main():
     )
 
     send_message(message)
-    save_state(news)
-    print("Nueva noticia traducida y enviada.")
+    save_state(news, relevance)
+    print(f"Nueva noticia publicada. Nivel de relevancia: {relevance}.")
 
 
 if __name__ == "__main__":
