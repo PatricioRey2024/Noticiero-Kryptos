@@ -5,11 +5,13 @@ import xml.etree.ElementTree as ET
 from email.utils import parsedate_to_datetime
 
 
-SEC_RSS_URL = "https://www.federalreserve.gov/feeds/press_all.xml"
+RSS_URL = "https://www.federalreserve.gov/feeds/press_all.xml"
+STATE_FILE = "state.json"
 
-def read_latest_sec_news():
+
+def read_latest_news():
     request = urllib.request.Request(
-        SEC_RSS_URL,
+        RSS_URL,
         headers={
             "User-Agent": os.environ["SEC_USER_AGENT"],
             "Accept": "application/rss+xml, application/xml",
@@ -23,7 +25,7 @@ def read_latest_sec_news():
     item = root.find("./channel/item")
 
     if item is None:
-        raise RuntimeError("El RSS de la SEC no devolvió noticias.")
+        raise RuntimeError("El RSS no devolvió ninguna noticia.")
 
     title = item.findtext("title", default="Sin título").strip()
     link = item.findtext("link", default="").strip()
@@ -37,7 +39,33 @@ def read_latest_sec_news():
         except ValueError:
             pass
 
-    return title, link, published
+    news_id = link or f"{title}|{published}"
+
+    return {
+        "id": news_id,
+        "title": title,
+        "link": link,
+        "published": published,
+    }
+
+
+def load_state():
+    if not os.path.exists(STATE_FILE):
+        return {}
+
+    with open(STATE_FILE, "r", encoding="utf-8") as file:
+        return json.load(file)
+
+
+def save_state(news):
+    state = {
+        "last_news_id": news["id"],
+        "last_title": news["title"],
+        "last_published": news["published"],
+    }
+
+    with open(STATE_FILE, "w", encoding="utf-8") as file:
+        json.dump(state, file, ensure_ascii=False, indent=2)
 
 
 def send_message(text):
@@ -68,17 +96,26 @@ def send_message(text):
 
 
 def main():
-    title, link, published = read_latest_sec_news()
+    news = read_latest_news()
+    state = load_state()
+
+    if state.get("last_news_id") == news["id"]:
+        print("La noticia más reciente ya fue enviada.")
+        return
 
     message = (
-        "🟠 COMUNICADO OFICIAL\n\n"
-        f"📰 {title}\n\n"
-        f"🕐 Publicado: {published}\n"
-        f"🌐 Fuente: Federal Reserve\n"
-        f"🔗 {link}"
+        "COMUNICADO OFICIAL\n\n"
+        "Resumen del acontecimiento\n\n"
+        f"{news['title']}\n\n"
+        "Fuente y fecha de publicación\n\n"
+        f"Federal Reserve — {news['published']}\n\n"
+        "Documento oficial\n\n"
+        f"{news['link']}"
     )
 
     send_message(message)
+    save_state(news)
+    print("Nueva noticia enviada y registrada.")
 
 
 if __name__ == "__main__":
