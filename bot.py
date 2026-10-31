@@ -434,6 +434,56 @@ def read_binance_news():
                 f"Binance detectado: {title}"
             )
 
+    security_updates = [
+        item
+        for item in news
+        if "security incident" in item["title"].lower()
+    ]
+
+    if len(security_updates) > 1:
+        def update_priority(item):
+            title_lower = item["title"].lower()
+            published_date = parse_news_datetime(
+                item["published"]
+            )
+
+            if published_date is None:
+                published_date = datetime.min.replace(
+                    tzinfo=timezone.utc
+                )
+
+            update_number = 0
+            match = re.search(
+                r"(?:update|recovery update)\s*#?(\d+)",
+                title_lower,
+            )
+
+            if match:
+                update_number = int(match.group(1))
+
+            return (
+                published_date,
+                update_number,
+            )
+
+        latest_update = max(
+            security_updates,
+            key=update_priority,
+        )
+
+        news = [
+            item
+            for item in news
+            if item not in security_updates
+        ]
+
+        news.append(latest_update)
+
+        print(
+            "Binance: se conservará únicamente la "
+            "actualización más reciente del incidente."
+        )
+
     print(
         f"Binance: {len(news)} "
         "anuncios relevantes encontrados."
