@@ -13,7 +13,7 @@ COINBASE_INCIDENTS_URL = (
     "https://status.coinbase.com/api/v2/incidents/unresolved.json"
 )
 STATE_FILE = "state.json"
-GEMINI_MODEL = "gemini-3.1-flash-lite"
+GEMINI_MODEL = "gemini-3.8-flash"
 MAX_PROCESSED_IDS = 200
 
 
@@ -372,7 +372,17 @@ def main():
         if news["id"] in state["processed_ids"]:
             continue
 
-        analysis = analyze_news(news)
+                try:
+            analysis = analyze_news(news)
+        except urllib.error.HTTPError as error:
+            if error.code == 503:
+                print(
+                    "Gemini no está disponible. "
+                    "La noticia queda pendiente para otra ejecución."
+                )
+                return
+            raise
+
         relevance = analysis["relevance"]
 
         state["processed_ids"].append(news["id"])
