@@ -98,7 +98,9 @@ def read_coinbase_incidents():
             f"Impacto declarado: {incident_impact}\n"
             f"Actualización: {update_body}"
         )
-
+        print(
+            f"Coinbase detectado: {title} | Estado: {status}"
+        )
         incidents.append(
             {
                 "id": news_id,
