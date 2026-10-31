@@ -5,6 +5,8 @@
   "last_relevance": "BAJA",
   "processed_ids": [
     "federal_reserve:https://www.federalreserve.gov/newsevents/pressreleases/orders20261029a.htm",
-    "coinbase:0zfln0bkpc8f:hf8xhlc9y7wv"
+    "coinbase:0zfln0bkpc8f:hf8xhlc9y7wv",
+    "bls:https://www.bls.gov/news.release/archives/cpi_10142026.htm",
+    "bls:https://www.bls.gov/news.release/archives/empsit_10022026.htm"
   ]
 }
