@@ -5,8 +5,7 @@ import xml.etree.ElementTree as ET
 from email.utils import parsedate_to_datetime
 
 
-SEC_RSS_URL = "https://www.sec.gov/rss/news/press.xml"
-
+SEC_RSS_URL = "https://www.federalreserve.gov/feeds/press_all.xml"
 
 def read_latest_sec_news():
     request = urllib.request.Request(
@@ -75,7 +74,7 @@ def main():
         "🟠 COMUNICADO OFICIAL\n\n"
         f"📰 {title}\n\n"
         f"🕐 Publicado: {published}\n"
-        f"🌐 Fuente: SEC\n"
+        f"🌐 Fuente: Federal Reserve\n"
         f"🔗 {link}"
     )
 
