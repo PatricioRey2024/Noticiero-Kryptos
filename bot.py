@@ -131,6 +131,8 @@ def read_coinbase_incidents():
     )
 
     return incidents
+
+    
     def read_bls_news():
     news = []
 
