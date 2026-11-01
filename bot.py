@@ -694,9 +694,9 @@ def read_coinmarketcap_market():
     )
 
     with urllib.request.urlopen(
-        url,
-        timeout=30,
-    ) as response:
+    request,
+    timeout=30,
+) as response:
         result = json.loads(
             response.read().decode("utf-8")
         )
