@@ -45,6 +45,7 @@ MAX_PROCESSED_IDS = 200
 MAX_NEWS_AGE_HOURS = 48
 TELEGRAM_MAX_ATTEMPTS = 3
 TELEGRAM_RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
+RUN_MODE = os.environ.get("RUN_MODE", "manual").strip().lower()
 
 
 def user_agent():
@@ -384,16 +385,25 @@ def collect_news():
 
 def load_state():
     if not os.path.exists(STATE_FILE):
-        return {"processed_ids": [], "published_messages": {}}
+        return {
+            "processed_ids": [],
+            "published_messages": {},
+            "alert_checked_ids": [],
+        }
     with open(STATE_FILE, "r", encoding="utf-8") as file:
         state = json.load(file)
     state.setdefault("processed_ids", [])
     state.setdefault("published_messages", {})
+    state.setdefault("alert_checked_ids", [])
     return state
 
 
 def save_state(state):
+    state.setdefault("processed_ids", [])
+    state.setdefault("alert_checked_ids", [])
+    state.setdefault("published_messages", {})
     state["processed_ids"] = state["processed_ids"][-MAX_PROCESSED_IDS:]
+    state["alert_checked_ids"] = state["alert_checked_ids"][-MAX_PROCESSED_IDS:]
     published_messages = state.get("published_messages", {})
     if len(published_messages) > MAX_PROCESSED_IDS:
         recent_ids = state["processed_ids"]
@@ -510,9 +520,14 @@ def build_message(news, analysis):
             "⚖️ Estado de la información\n\n"
             f"Comunicado oficial de {news['source']}.\n\n"
         )
+    heading = (
+        "🚨 NOTIKRYPTOS ALERT\n\n"
+        if analysis.get("relevance") == "ALTA"
+        else "🔴 COMUNICADO OFICIAL\n\n"
+    )
     return (
-        "🔴 COMUNICADO OFICIAL\n\n"
-        "📰 Resumen del acontecimiento\n\n"
+        heading
+        + "📰 Resumen del acontecimiento\n\n"
         f"{analysis['title_es']}\n\n"
         "📝 Síntesis\n\n"
         f"{analysis['summary_es']}\n\n"
@@ -530,10 +545,18 @@ def build_message(news, analysis):
 
 def main():
     state = load_state()
+    run_mode = os.environ.get("RUN_MODE", RUN_MODE).strip().lower()
 
     try:
         market_data = read_coinmarketcap_market()
-        print(format_coinmarketcap_snapshot(market_data))
+        market_snapshot = format_coinmarketcap_snapshot(market_data)
+        print(market_snapshot)
+        if run_mode == "daily":
+            delivery = send_message(market_snapshot)
+            print(
+                "CoinMarketCap: resumen diario enviado a Telegram. "
+                f"message_id={delivery.get('message_id')}"
+            )
     except urllib.error.HTTPError as error:
         body = error.read().decode("utf-8", errors="replace")
         print(f"CoinMarketCap no disponible: HTTP {error.code} — {body}")
@@ -549,6 +572,11 @@ def main():
     for news in news_items:
         news_id = news["id"]
         legacy_ids = news.get("legacy_ids", [])
+        if run_mode == "alerts" and (
+            news_id in state["alert_checked_ids"]
+            or any(old_id in state["alert_checked_ids"] for old_id in legacy_ids)
+        ):
+            continue
         if news_id in state["processed_ids"] or any(
             old_id in state["processed_ids"] for old_id in legacy_ids
         ):
@@ -570,6 +598,15 @@ def main():
                 return
             raise
         relevance = analysis["relevance"]
+        if run_mode == "alerts":
+            state["alert_checked_ids"].append(news_id)
+            save_state(state)
+            if relevance != "ALTA":
+                print(
+                    f"{news['source']}: no es alerta crítica. "
+                    f"Nivel de relevancia: {relevance}."
+                )
+                continue
         if relevance in {"BAJA", "DESCARTAR"}:
             state["processed_ids"].append(news_id)
             save_state(state)
