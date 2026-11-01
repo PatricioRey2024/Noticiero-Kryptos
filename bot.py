@@ -296,7 +296,13 @@ def read_coinmarketcap_market():
 def format_coinmarketcap_snapshot(market_data):
     lines = ["📊 Estado actual del mercado cripto", ""]
     names = {"1": "BTC", "1027": "ETH", "5426": "SOL", "6535": "NEAR"}
-    for asset_id, asset in market_data.get("quotes", {}).items():
+    quotes = market_data.get("quotes", {})
+    if isinstance(quotes, list):
+        assets = [(asset.get("id", ""), asset) for asset in quotes]
+    else:
+        assets = quotes.items()
+
+    for asset_id, asset in assets:
         quote = asset.get("quote", {})
         if isinstance(quote, list):
             quote = quote[0] if quote else {}
