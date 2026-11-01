@@ -303,10 +303,17 @@ def format_coinmarketcap_snapshot(market_data):
         assets = quotes.items()
 
     for asset_id, asset in assets:
-        quote = asset.get("quote", {})
+        quote = asset.get("quote", {}) if isinstance(asset, dict) else {}
         if isinstance(quote, list):
             quote = quote[0] if quote else {}
-        usd = quote.get("USD", {})
+        if isinstance(quote, dict) and "USD" in quote:
+            usd = quote.get("USD", {})
+        else:
+            usd = quote
+        if isinstance(usd, list):
+            usd = usd[0] if usd else {}
+        if not isinstance(usd, dict):
+            usd = {}
         symbol = names.get(str(asset_id), asset.get("symbol", "ACTIVO"))
         price = usd.get("price", "N/D")
         lines.append(f"{symbol}: ${price}")
