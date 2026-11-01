@@ -1209,7 +1209,8 @@ def main():
 
     try:
         read_coinmarketcap_market()
-        except urllib.error.HTTPError as error:
+
+    except urllib.error.HTTPError as error:
         error_body = error.read().decode(
             "utf-8",
             errors="replace",
@@ -1219,7 +1220,7 @@ def main():
             "CoinMarketCap no disponible: "
             f"HTTP {error.code} — {error_body}"
         )
-    
+
     except Exception as error:
         print(
             f"Error consultando CoinMarketCap: {error}"
@@ -1311,7 +1312,6 @@ def main():
         print(
             "No hay noticias nuevas para procesar."
         )
-
 
 if __name__ == "__main__":
     main()
