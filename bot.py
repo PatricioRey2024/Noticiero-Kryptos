@@ -82,6 +82,11 @@ CMC_QUOTES_URL = (
     "cryptocurrency/quotes/latest"
 )
 
+CMC_HISTORICAL_URL = (
+    "https://pro-api.coinmarketcap.com/v2/"
+    "cryptocurrency/ohlcv/historical"
+)
+
 BLS_FEEDS = [
     (
         "BLS - Inflación CPI",
