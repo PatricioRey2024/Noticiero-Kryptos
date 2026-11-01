@@ -43,6 +43,8 @@ STATE_FILE = "state.json"
 GEMINI_MODEL = "gemini-3.5-flash-lite"
 MAX_PROCESSED_IDS = 200
 MAX_NEWS_AGE_HOURS = 48
+TELEGRAM_MAX_ATTEMPTS = 3
+TELEGRAM_RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
 
 
 def user_agent():
@@ -382,15 +384,24 @@ def collect_news():
 
 def load_state():
     if not os.path.exists(STATE_FILE):
-        return {"processed_ids": []}
+        return {"processed_ids": [], "published_messages": {}}
     with open(STATE_FILE, "r", encoding="utf-8") as file:
         state = json.load(file)
     state.setdefault("processed_ids", [])
+    state.setdefault("published_messages", {})
     return state
 
 
 def save_state(state):
     state["processed_ids"] = state["processed_ids"][-MAX_PROCESSED_IDS:]
+    published_messages = state.get("published_messages", {})
+    if len(published_messages) > MAX_PROCESSED_IDS:
+        recent_ids = state["processed_ids"]
+        state["published_messages"] = {
+            news_id: published_messages[news_id]
+            for news_id in recent_ids
+            if news_id in published_messages
+        }
     with open(STATE_FILE, "w", encoding="utf-8") as file:
         json.dump(state, file, ensure_ascii=False, indent=2)
 
@@ -463,10 +474,33 @@ def send_message(text):
         data=json.dumps(payload).encode("utf-8"),
         headers={"Content-Type": "application/json"}, method="POST",
     )
-    with urllib.request.urlopen(request, timeout=30) as response:
-        result = json.loads(response.read().decode("utf-8"))
-    if not result.get("ok"):
-        raise RuntimeError(result)
+    for attempt in range(1, TELEGRAM_MAX_ATTEMPTS + 1):
+        try:
+            with urllib.request.urlopen(request, timeout=30) as response:
+                result = json.loads(response.read().decode("utf-8"))
+            if not result.get("ok"):
+                raise RuntimeError(result)
+            message = result.get("result") or {}
+            return {
+                "message_id": message.get("message_id"),
+                "chat_id": message.get("chat", {}).get("id"),
+                "date": message.get("date"),
+            }
+        except urllib.error.HTTPError as error:
+            if error.code not in TELEGRAM_RETRYABLE_STATUS_CODES or attempt == TELEGRAM_MAX_ATTEMPTS:
+                raise
+            retry_after = error.headers.get("Retry-After")
+            try:
+                wait_seconds = max(1, min(int(retry_after), 60))
+            except (TypeError, ValueError):
+                wait_seconds = 2 ** (attempt - 1)
+            print(
+                f"Telegram no disponible temporalmente (HTTP {error.code}). "
+                f"Reintento en {wait_seconds} segundos."
+            )
+            time.sleep(wait_seconds)
+
+    raise RuntimeError("Telegram no confirmó la entrega del mensaje.")
 
 
 def build_message(news, analysis):
@@ -536,13 +570,26 @@ def main():
                 return
             raise
         relevance = analysis["relevance"]
-        state["processed_ids"].append(news_id)
-        save_state(state)
-        processed_any = True
         if relevance in {"BAJA", "DESCARTAR"}:
+            state["processed_ids"].append(news_id)
+            save_state(state)
+            processed_any = True
             print(f"{news['source']}: noticia no publicada. Nivel de relevancia: {relevance}.")
             continue
-        send_message(build_message(news, analysis))
+
+        delivery = send_message(build_message(news, analysis))
+        state["processed_ids"].append(news_id)
+        state["published_messages"][news_id] = {
+            "source": news["source"],
+            "title": news["title"],
+            "relevance": relevance,
+            "telegram_message_id": delivery.get("message_id"),
+            "telegram_chat_id": delivery.get("chat_id"),
+            "telegram_date": delivery.get("date"),
+            "recorded_at": datetime.now(timezone.utc).isoformat(),
+        }
+        save_state(state)
+        processed_any = True
         print(f"{news['source']}: noticia publicada. Nivel de relevancia: {relevance}.")
     if not processed_any:
         print("No hay noticias nuevas para procesar.")
