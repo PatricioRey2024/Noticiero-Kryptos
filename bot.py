@@ -721,7 +721,6 @@ def read_coinmarketcap_market():
     }
 
 
-def read_bls_news():
 
 def read_bls_news():
     news = []
