@@ -1146,7 +1146,7 @@ def build_message(news, analysis):
 
 
 def main():
-        state = load_state()
+    state = load_state()
 
     try:
         read_coinmarketcap_market()
@@ -1173,7 +1173,20 @@ def main():
     for news in news_items:
         news_id = news["id"]
 
-        if news_id in state["processed_ids"]:
+        legacy_ids = news.get(
+            "legacy_ids",
+            [],
+        )
+
+        already_processed = (
+            news_id in state["processed_ids"]
+            or any(
+                old_id in state["processed_ids"]
+                for old_id in legacy_ids
+            )
+        )
+
+        if already_processed:
             continue
 
         if not is_recent_news(news["published"]):
