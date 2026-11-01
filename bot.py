@@ -1209,11 +1209,17 @@ def main():
 
     try:
         read_coinmarketcap_market()
-    except urllib.error.HTTPError as error:
-        print(
-            "CoinMarketCap no disponible temporalmente: "
-            f"HTTP {error.code}"
+        except urllib.error.HTTPError as error:
+        error_body = error.read().decode(
+            "utf-8",
+            errors="replace",
         )
+
+        print(
+            "CoinMarketCap no disponible: "
+            f"HTTP {error.code} — {error_body}"
+        )
+    
     except Exception as error:
         print(
             f"Error consultando CoinMarketCap: {error}"
