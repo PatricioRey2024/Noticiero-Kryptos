@@ -1146,7 +1146,20 @@ def build_message(news, analysis):
 
 
 def main():
-    state = load_state()
+        state = load_state()
+
+    try:
+        read_coinmarketcap_market()
+    except urllib.error.HTTPError as error:
+        print(
+            "CoinMarketCap no disponible temporalmente: "
+            f"HTTP {error.code}"
+        )
+    except Exception as error:
+        print(
+            f"Error consultando CoinMarketCap: {error}"
+        )
+
     news_items = collect_news()
 
     if not news_items:
