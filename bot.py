@@ -77,6 +77,10 @@ BINANCE_KEYWORDS = [
     "incidente",
     "hackeo",
 ]
+CMC_QUOTES_URL = (
+    "https://pro-api.coinmarketcap.com/v3/"
+    "cryptocurrency/quotes/latest"
+)
 
 BLS_FEEDS = [
     (
@@ -611,6 +615,52 @@ def read_binance_news():
     )
 
     return news
+
+
+def read_coinmarketcap_market():
+    api_key = os.environ["CMC_API_KEY"]
+
+    query = urllib.parse.urlencode(
+        {
+            "slug": (
+                "bitcoin,ethereum,solana,"
+                "near-protocol"
+            ),
+            "convert": "USD",
+        }
+    )
+
+    url = f"{CMC_QUOTES_URL}?{query}"
+
+    request = urllib.request.Request(
+        url,
+        headers={
+            "Accept": "application/json",
+            "X-CMC_PRO_API_KEY": api_key,
+        },
+    )
+
+    with urllib.request.urlopen(
+        request,
+        timeout=30,
+    ) as response:
+        result = json.loads(
+            response.read().decode("utf-8")
+        )
+
+    market_data = result.get("data", {})
+
+    if not market_data:
+        raise RuntimeError(
+            "CoinMarketCap no devolvió datos de mercado."
+        )
+
+    print(
+        "CoinMarketCap: datos de mercado recibidos "
+        f"para {len(market_data)} activos."
+    )
+
+    return market_data
 
 
 def read_bls_news():
