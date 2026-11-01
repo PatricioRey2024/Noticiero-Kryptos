@@ -1288,7 +1288,21 @@ def main():
     state = load_state()
 
     try:
-        read_coinmarketcap_market()
+def main():
+    state = load_state()
+
+    try:
+        market_data = read_coinmarketcap_market()
+        market_snapshot = format_coinmarketcap_snapshot(
+            market_data
+        )
+        print(market_snapshot)
+        
+
+    except urllib.error.HTTPError as error:
+        error_body = error.read().decode(
+            "utf-8",
+            errors="replace",        
 
     except urllib.error.HTTPError as error:
         error_body = error.read().decode(
