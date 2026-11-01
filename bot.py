@@ -694,46 +694,34 @@ def read_coinmarketcap_market():
     )
 
     with urllib.request.urlopen(
-        request,
+        url,
         timeout=30,
     ) as response:
         result = json.loads(
             response.read().decode("utf-8")
         )
 
-    quote_data = result.get(
+    market_data = result.get(
         "data",
         {},
     )
 
-    if not quote_data:
+    if not market_data:
         raise RuntimeError(
-            "CoinMarketCap no devolvió cotizaciones."
-        )
-
-    historical_data = {}
-
-    for interval in [
-        "1h",
-        "4h",
-        "12h",
-    ]:
-        historical_data[interval] = (
-            read_coinmarketcap_ohlcv(
-                interval,
-                2,
-            )
+            "CoinMarketCap no devolvió datos de mercado."
         )
 
     print(
-        "CoinMarketCap: cotizaciones actuales y "
-        "datos de 1 h, 4 h y 12 h recibidos."
+        "CoinMarketCap: cotizaciones actuales recibidas "
+        f"para {len(market_data)} activos."
     )
 
     return {
-        "quotes": quote_data,
-        "historical": historical_data,
+        "quotes": market_data,
     }
+
+
+def read_bls_news():
 
 def read_bls_news():
     news = []
