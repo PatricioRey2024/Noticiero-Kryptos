@@ -621,6 +621,54 @@ def read_binance_news():
 
     return news
 
+def read_coinmarketcap_ohlcv(interval, count):
+    api_key = os.environ["CMC_API_KEY"]
+
+    query = urllib.parse.urlencode(
+        {
+            "slug": (
+                "bitcoin,ethereum,solana,"
+                "near-protocol"
+            ),
+            "interval": interval,
+            "count": count,
+            "convert": "USD",
+            "skip_invalid": "true",
+        }
+    )
+
+    url = f"{CMC_HISTORICAL_URL}?{query}"
+
+    request = urllib.request.Request(
+        url,
+        headers={
+            "Accept": "application/json",
+            "X-CMC_PRO_API_KEY": api_key,
+        },
+    )
+
+    with urllib.request.urlopen(
+        request,
+        timeout=30,
+    ) as response:
+        result = json.loads(
+            response.read().decode("utf-8")
+        )
+
+    historical_data = result.get("data", {})
+
+    if not historical_data:
+        raise RuntimeError(
+            f"CoinMarketCap no devolvió datos para {interval}."
+        )
+
+    print(
+        f"CoinMarketCap: datos históricos recibidos "
+        f"para intervalo {interval}."
+    )
+
+    return historical_data
+
 
 def read_coinmarketcap_market():
     api_key = os.environ["CMC_API_KEY"]
