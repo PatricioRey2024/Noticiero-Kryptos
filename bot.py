@@ -720,6 +720,86 @@ def read_coinmarketcap_market():
         "quotes": market_data,
     }
 
+def format_coinmarketcap_snapshot(market_data):
+    lines = [
+        "📊 Estado actual del mercado cripto",
+        "",
+    ]
+
+    quotes = market_data.get(
+        "quotes",
+        {},
+    )
+
+    names = {
+        "1": "BTC",
+        "1027": "ETH",
+        "5426": "SOL",
+        "6535": "NEAR",
+    }
+
+    for asset_id, asset in quotes.items():
+        symbol = names.get(
+            str(asset_id),
+            asset.get("symbol", "ACTIVO"),
+        )
+
+        quote_data = asset.get(
+            "quote",
+            {},
+        )
+
+        if isinstance(quote_data, list):
+            if not quote_data:
+                continue
+
+            quote_data = quote_data[0]
+
+        usd = quote_data.get(
+            "USD",
+            {},
+        )
+
+        price = usd.get(
+            "price",
+            "N/D",
+        )
+
+        change_1h = usd.get(
+            "percent_change_1h",
+            "N/D",
+        )
+
+        change_24h = usd.get(
+            "percent_change_24h",
+            "N/D",
+        )
+
+        change_7d = usd.get(
+            "percent_change_7d",
+            "N/D",
+        )
+
+        change_30d = usd.get(
+            "percent_change_30d",
+            "N/D",
+        )
+
+        lines.append(
+            f"{symbol}: ${price}"
+        )
+
+        lines.append(
+            f"1 h: {change_1h}% · "
+            f"24 h: {change_24h}% · "
+            f"7 d: {change_7d}% · "
+            f"30 d: {change_30d}%"
+        )
+
+        lines.append("")
+
+    return "\n".join(lines)
+
 
 
 def read_bls_news():
