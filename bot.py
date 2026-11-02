@@ -7,6 +7,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
+from html import unescape
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 
@@ -23,6 +24,7 @@ CMC_FEAR_GREED_URL = "https://pro-api.coinmarketcap.com/v3/fear-and-greed/latest
 CMC_ALTCOIN_SEASON_URL = "https://pro-api.coinmarketcap.com/v1/altcoin-season-index/latest"
 ALTERNATIVE_ME_FNG_URL = "https://api.alternative.me/fng/?limit=1"
 YAHOO_CHART_URL = "https://query1.finance.yahoo.com/v8/finance/chart/"
+FOMC_CALENDAR_URL = "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm"
 
 BLS_FEEDS = [
     ("BLS - Inflación CPI", "https://www.bls.gov/feed/cpi.rss"),
@@ -450,6 +452,94 @@ def format_extended_market_context(sentiment, traditional_market):
     return "\n".join(lines)
 
 
+def read_fomc_agenda(year=None):
+    year = year or datetime.now(timezone.utc).year
+    request = urllib.request.Request(FOMC_CALENDAR_URL, headers=rss_headers())
+    with urllib.request.urlopen(request, timeout=30) as response:
+        html = response.read().decode("utf-8", errors="replace")
+    text = unescape(re.sub(r"<[^>]+>", " ", html))
+    text = re.sub(r"\s+", " ", text)
+    section_marker = f"{year} FOMC Meetings"
+    if section_marker not in text:
+        raise RuntimeError(f"No se encontró el calendario FOMC de {year}.")
+    section = text.split(section_marker, 1)[1]
+    previous_year = f"{year - 1} FOMC Meetings"
+    if previous_year in section:
+        section = section.split(previous_year, 1)[0]
+    month_names = (
+        "January|February|March|April|May|June|July|August|September|October|November|December"
+    )
+    matches = re.findall(
+        rf"({month_names})\s+(\d{{1,2}}(?:-\d{{1,2}})?)\*?\s+Statement:",
+        section,
+    )
+    december_match = re.search(
+        r"December\s+(\d{1,2}(?:-\d{1,2})?)\*?\s+\* Meeting associated",
+        section,
+    )
+    if december_match:
+        matches.append(("December", december_match.group(1)))
+    agenda = []
+    seen = set()
+    month_numbers = {
+        name: index for index, name in enumerate(
+            ("January", "February", "March", "April", "May", "June",
+             "July", "August", "September", "October", "November", "December"),
+            start=1,
+        )
+    }
+    today = datetime.now(timezone.utc).date()
+    for month_name, days in matches:
+        key = (month_name, days)
+        if key in seen:
+            continue
+        seen.add(key)
+        first_day = int(days.split("-", 1)[0])
+        start_date = datetime(year, month_numbers[month_name], first_day).date()
+        if start_date < today:
+            continue
+        agenda.append({
+            "title": f"Reunión FOMC · {month_name} {days} {year}",
+            "date": f"{month_name} {days} {year}",
+            "start_date": start_date.isoformat(),
+            "source": "Federal Reserve",
+            "link": FOMC_CALENDAR_URL,
+        })
+    if not agenda:
+        raise RuntimeError("El calendario FOMC no devolvió reuniones.")
+    return agenda
+
+
+def format_weekly_report(state, agenda):
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(days=7)
+    recent = []
+    for item in state.get("published_messages", {}).values():
+        recorded_at = parse_news_datetime(item.get("recorded_at"))
+        if recorded_at and recorded_at >= cutoff:
+            recent.append(item)
+    recent.sort(key=lambda item: item.get("telegram_date") or 0, reverse=True)
+    lines = ["📅 NOTIKRYPTOS · Informe semanal", ""]
+    lines.append("📰 Acontecimientos publicados en los últimos 7 días")
+    if recent:
+        for item in recent[:12]:
+            lines.append(
+                f"• [{item.get('relevance', 'N/D')}] "
+                f"{item.get('title', 'Sin título')} · {item.get('source', 'N/D')}"
+            )
+    else:
+        lines.append("• No hay publicaciones registradas en el período.")
+    lines.append("")
+    lines.append("🗓️ Agenda FOMC próxima")
+    for event in agenda[:6]:
+        lines.append(f"• {event['title']}")
+    lines.append("")
+    lines.append("⚖️ Alcance")
+    lines.append("Resumen informativo basado en publicaciones registradas y calendario oficial.")
+    lines.append(f"🔗 Fuente del calendario: {FOMC_CALENDAR_URL}")
+    return "\n".join(lines)
+
+
 def read_bls_news():
     news = []
     for source_name, feed_url in BLS_FEEDS:
@@ -635,6 +725,27 @@ DESCARTAR: promoción, listado, airdrop o información sin impacto identificable
     return content
 
 
+def has_cross_source_confirmation(news, news_items):
+    if news["source"] in {"Federal Reserve", "U.S. Treasury", "BLS - Inflación CPI", "BLS - Empleo"}:
+        return True
+    words = {
+        word for word in normalize_binance_title(news["title"]).split()
+        if len(word) >= 5
+    }
+    if len(words) < 2:
+        return False
+    for other in news_items:
+        if other is news or other["source"] == news["source"]:
+            continue
+        other_words = {
+            word for word in normalize_binance_title(other["title"]).split()
+            if len(word) >= 5
+        }
+        if len(words & other_words) >= 2:
+            return True
+    return False
+
+
 def send_message(text):
     token = os.environ["TELEGRAM_BOT_TOKEN"]
     payload = {
@@ -677,7 +788,7 @@ def send_message(text):
     raise RuntimeError("Telegram no confirmó la entrega del mensaje.")
 
 
-def build_message(news, analysis):
+def build_message(news, analysis, cross_source_confirmed=False):
     notice = ""
     if news["source"] in {"Coinbase Status", "Binance"}:
         notice = (
@@ -687,7 +798,9 @@ def build_message(news, analysis):
         "Federal Reserve", "U.S. Treasury", "BLS - Inflación CPI",
         "BLS - Empleo",
     }
-    if news["source"] in government_sources:
+    if cross_source_confirmed:
+        verification = "✅ CONFIRMADO · corroborado por más de una fuente"
+    elif news["source"] in government_sources:
         verification = "✅ CONFIRMADO · fuente oficial"
     elif news["source"] in {
         "Coinbase Status", "Binance", "OpenAI News", "Google AI", "Microsoft AI",
@@ -765,6 +878,19 @@ def main():
                 f"message_id={delivery.get('message_id')}"
             )
 
+    if run_mode == "weekly":
+        try:
+            agenda = read_fomc_agenda()
+            weekly_report = format_weekly_report(state, agenda)
+            delivery = send_message(weekly_report)
+            print(
+                "Informe semanal enviado a Telegram. "
+                f"message_id={delivery.get('message_id')}"
+            )
+        except Exception as error:
+            print(f"Informe semanal no disponible: {error}")
+        return
+
     news_items = collect_news()
     if not news_items:
         print("No se encontraron noticias o incidentes nuevos.")
@@ -816,7 +942,13 @@ def main():
             print(f"{news['source']}: noticia no publicada. Nivel de relevancia: {relevance}.")
             continue
 
-        delivery = send_message(build_message(news, analysis))
+        delivery = send_message(
+            build_message(
+                news,
+                analysis,
+                cross_source_confirmed=has_cross_source_confirmation(news, news_items),
+            )
+        )
         state["processed_ids"].append(news_id)
         state["published_messages"][news_id] = {
             "source": news["source"],
@@ -836,4 +968,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
