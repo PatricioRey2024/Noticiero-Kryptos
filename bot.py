@@ -19,11 +19,29 @@ BINANCE_URL = (
     "cms/article/catalog/list/query"
 )
 CMC_URL = "https://pro-api.coinmarketcap.com/v3/cryptocurrency/quotes/latest"
+CMC_FEAR_GREED_URL = "https://pro-api.coinmarketcap.com/v3/fear-and-greed/latest"
+CMC_ALTCOIN_SEASON_URL = "https://pro-api.coinmarketcap.com/v1/altcoin-season-index/latest"
+ALTERNATIVE_ME_FNG_URL = "https://api.alternative.me/fng/?limit=1"
+YAHOO_CHART_URL = "https://query1.finance.yahoo.com/v8/finance/chart/"
 
 BLS_FEEDS = [
     ("BLS - Inflación CPI", "https://www.bls.gov/feed/cpi.rss"),
     ("BLS - Empleo", "https://www.bls.gov/feed/empsit.rss"),
 ]
+
+OFFICIAL_TECH_FEEDS = [
+    ("OpenAI News", "https://openai.com/news/rss.xml"),
+    ("Google AI", "https://blog.google/technology/ai/rss/"),
+    ("Microsoft AI", "https://www.microsoft.com/en-us/microsoft-cloud/blog/feed//"),
+]
+
+YAHOO_MARKET_SYMBOLS = {
+    "DXY": "DX-Y.NYB",
+    "Oro": "GC=F",
+    "Petróleo WTI": "CL=F",
+    "Nasdaq": "^IXIC",
+    "S&P 500": "^GSPC",
+}
 
 TREASURY_KEYWORDS = (
     "sanctions sanction ofac debt liquidity financial finance "
@@ -330,6 +348,108 @@ def format_coinmarketcap_snapshot(market_data):
     return "\n".join(lines)
 
 
+def read_cmc_sentiment():
+    api_key = os.environ["CMC_API_KEY"]
+    headers = {"Accept": "application/json", "X-CMC_PRO_API_KEY": api_key}
+    sentiment = {}
+    for name, url in (
+        ("fear_greed", CMC_FEAR_GREED_URL),
+        ("altcoin_season", CMC_ALTCOIN_SEASON_URL),
+    ):
+        request = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(request, timeout=30) as response:
+            result = json.loads(response.read().decode("utf-8"))
+        data = result.get("data")
+        if not data:
+            raise RuntimeError(f"CoinMarketCap no devolvió datos para {name}.")
+        sentiment[name] = data
+    return sentiment
+
+
+def read_alternative_me_fear_greed():
+    request = urllib.request.Request(
+        ALTERNATIVE_ME_FNG_URL,
+        headers={"Accept": "application/json", "User-Agent": user_agent()},
+    )
+    with urllib.request.urlopen(request, timeout=30) as response:
+        result = json.loads(response.read().decode("utf-8"))
+    data = result.get("data") or []
+    if not data:
+        raise RuntimeError("Alternative.me no devolvió Fear & Greed.")
+    latest = data[0]
+    return {
+        "value": latest.get("value"),
+        "value_classification": latest.get("value_classification"),
+        "update_time": latest.get("timestamp"),
+        "source": "Alternative.me",
+    }
+
+
+def read_yahoo_market_data():
+    market = {}
+    for label, symbol in YAHOO_MARKET_SYMBOLS.items():
+        request = urllib.request.Request(
+            f"{YAHOO_CHART_URL}{urllib.parse.quote(symbol, safe='')}?range=5d&interval=1d",
+            headers={"Accept": "application/json", "User-Agent": user_agent()},
+        )
+        with urllib.request.urlopen(request, timeout=30) as response:
+            result = json.loads(response.read().decode("utf-8"))
+        chart = (result.get("chart") or {}).get("result") or []
+        if not chart:
+            raise RuntimeError(f"Yahoo Finance no devolvió datos para {label}.")
+        chart_data = chart[0]
+        timestamps = chart_data.get("timestamp") or []
+        quotes = (chart_data.get("indicators") or {}).get("quote") or []
+        closes = (quotes[0] if quotes else {}).get("close") or []
+        valid = [
+            (timestamp, close)
+            for timestamp, close in zip(timestamps, closes)
+            if close is not None
+        ]
+        if not valid:
+            raise RuntimeError(f"Yahoo Finance devolvió una cotización vacía para {label}.")
+        timestamp, close = valid[-1]
+        market[label] = {
+            "timestamp": timestamp,
+            "close": close,
+            "source": "Yahoo Finance chart",
+            "symbol": symbol,
+        }
+    return market
+
+
+def format_extended_market_context(sentiment, traditional_market):
+    lines = ["🌐 Contexto macro y sentimiento", ""]
+    lines.append("📈 Mercados tradicionales")
+    for label, item in traditional_market.items():
+        updated = datetime.fromtimestamp(item["timestamp"], tz=timezone.utc)
+        lines.append(
+            f"{label}: {item['close']} ({updated.strftime('%Y-%m-%d %H:%M UTC')})"
+        )
+    lines.append("Fuente de mercado: Yahoo Finance chart · último dato disponible")
+    lines.append("")
+
+    fear_greed = sentiment.get("fear_greed") or {}
+    if fear_greed.get("value") is not None:
+        classification = fear_greed.get("value_classification", "N/D")
+        lines.append(
+            f"😨 Fear & Greed: {fear_greed.get('value')}/100 ({classification})"
+        )
+        lines.append(f"Fuente: {fear_greed.get('source', 'CoinMarketCap')}")
+
+    altcoin = sentiment.get("altcoin_season") or {}
+    if altcoin.get("altcoin_index") is not None:
+        lines.append(
+            f"🔄 Altcoin Season: {altcoin.get('altcoin_index')}/100"
+        )
+        lines.append(
+            f"Fuente: CoinMarketCap · actualización {altcoin.get('snapshot_time', 'N/D')}"
+        )
+    lines.append("")
+    lines.append("⚖️ Estado: datos de mercado informativos, no pronóstico")
+    return "\n".join(lines)
+
+
 def read_bls_news():
     news = []
     for source_name, feed_url in BLS_FEEDS:
@@ -364,6 +484,49 @@ def read_bls_news():
     return news
 
 
+def read_official_tech_news():
+    news = []
+    for source_name, feed_url in OFFICIAL_TECH_FEEDS:
+        request = urllib.request.Request(feed_url, headers=rss_headers())
+        with urllib.request.urlopen(request, timeout=30) as response:
+            root = ET.fromstring(response.read())
+        items = [
+            element for element in root.iter()
+            if element.tag.split("}")[-1] in {"item", "entry"}
+        ]
+        if not items:
+            print(f"{source_name}: feed sin publicaciones.")
+            continue
+        item = items[0]
+        values = {}
+        link = ""
+        for child in item:
+            name = child.tag.split("}")[-1]
+            if name in {
+                "title", "pubDate", "published", "updated", "date",
+                "description", "summary", "content",
+            }:
+                values.setdefault(name, (child.text or "").strip())
+            if name == "link":
+                link = (child.attrib.get("href", "") or child.text or "").strip()
+        title = values.get("title") or "Sin título"
+        published = next(
+            (values.get(k) for k in ("pubDate", "published", "updated", "date") if values.get(k)),
+            "",
+        )
+        details = values.get("description") or values.get("summary") or values.get("content") or ""
+        news.append({
+            "id": f"tech:{source_name}:{link or title}",
+            "source": source_name,
+            "title": title,
+            "link": link or feed_url,
+            "published": published,
+            "details": details,
+        })
+        print(f"{source_name}: publicación encontrada.")
+    return news
+
+
 def collect_news():
     news = []
     sources = [
@@ -372,6 +535,7 @@ def collect_news():
         ("Coinbase Status", read_coinbase_incidents),
         ("Binance", read_binance_news),
         ("BLS", read_bls_news),
+        ("Tecnología e IA", read_official_tech_news),
     ]
     for label, reader in sources:
         try:
@@ -517,9 +681,20 @@ def build_message(news, analysis):
     notice = ""
     if news["source"] in {"Coinbase Status", "Binance"}:
         notice = (
-            "⚖️ Estado de la información\n\n"
             f"Comunicado oficial de {news['source']}.\n\n"
         )
+    government_sources = {
+        "Federal Reserve", "U.S. Treasury", "BLS - Inflación CPI",
+        "BLS - Empleo",
+    }
+    if news["source"] in government_sources:
+        verification = "✅ CONFIRMADO · fuente oficial"
+    elif news["source"] in {
+        "Coinbase Status", "Binance", "OpenAI News", "Google AI", "Microsoft AI",
+    }:
+        verification = "⚖️ COMUNICADO OFICIAL · requiere contexto independiente"
+    else:
+        verification = "🟡 EN VERIFICACIÓN"
     heading = (
         "🚨 NOTIKRYPTOS ALERT\n\n"
         if analysis.get("relevance") == "ALTA"
@@ -533,6 +708,8 @@ def build_message(news, analysis):
         f"{analysis['summary_es']}\n\n"
         "📊 Impacto potencial en el mercado\n\n"
         f"{analysis['impact_es']}\n\n"
+        "⚖️ Estado de verificación\n\n"
+        f"{verification}\n\n"
         f"{notice}"
         "🕐 Fecha de publicación\n\n"
         f"{format_published_date(news['published'])}\n\n"
@@ -547,21 +724,46 @@ def main():
     state = load_state()
     run_mode = os.environ.get("RUN_MODE", RUN_MODE).strip().lower()
 
+    market_snapshot = ""
     try:
         market_data = read_coinmarketcap_market()
         market_snapshot = format_coinmarketcap_snapshot(market_data)
         print(market_snapshot)
-        if run_mode == "daily":
-            delivery = send_message(market_snapshot)
-            print(
-                "CoinMarketCap: resumen diario enviado a Telegram. "
-                f"message_id={delivery.get('message_id')}"
-            )
     except urllib.error.HTTPError as error:
         body = error.read().decode("utf-8", errors="replace")
         print(f"CoinMarketCap no disponible: HTTP {error.code} — {body}")
     except Exception as error:
         print(f"Error consultando CoinMarketCap: {error}")
+
+    sentiment = {}
+    try:
+        sentiment = read_cmc_sentiment()
+    except Exception as error:
+        print(f"CoinMarketCap: sentimiento no disponible: {error}")
+        try:
+            sentiment["fear_greed"] = read_alternative_me_fear_greed()
+            print("Fear & Greed: datos recibidos desde Alternative.me.")
+        except Exception as fallback_error:
+            print(f"Fear & Greed: fallback no disponible: {fallback_error}")
+
+    traditional_market = {}
+    try:
+        traditional_market = read_yahoo_market_data()
+    except Exception as error:
+        print(f"Mercados tradicionales no disponibles: {error}")
+
+    if run_mode == "daily":
+        daily_sections = [section for section in (
+            market_snapshot,
+            format_extended_market_context(sentiment, traditional_market)
+            if sentiment or traditional_market else "",
+        ) if section]
+        if daily_sections:
+            delivery = send_message("\n\n".join(daily_sections))
+            print(
+                "Resumen diario de mercado enviado a Telegram. "
+                f"message_id={delivery.get('message_id')}"
+            )
 
     news_items = collect_news()
     if not news_items:
@@ -634,3 +836,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
