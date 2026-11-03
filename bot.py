@@ -27,6 +27,7 @@ YAHOO_CHART_URL = "https://query1.finance.yahoo.com/v8/finance/chart/"
 FOMC_CALENDAR_URL = "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm"
 BLS_SCHEDULE_URL = "https://www.bls.gov/schedule/{year}/"
 BEA_SCHEDULE_URL = "https://www.bea.gov/news/schedule/"
+BLS_API_URL = "https://api.bls.gov/publicAPI/v1/timeseries/data/"
 
 BLS_FEEDS = [
     ("BLS - Inflación CPI", "https://www.bls.gov/feed/cpi.rss"),
@@ -598,6 +599,64 @@ def read_bls_macro_calendar(year=None):
     if not agenda:
         raise RuntimeError("El calendario BLS no devolvió eventos macroeconómicos futuros.")
     return agenda
+
+
+def read_bls_official_snapshot(indicator):
+    """Obtiene valores oficiales publicados y anteriores desde la API pública BLS.
+
+    No contiene consenso de mercado: expected permanece separado y sin inventar.
+    """
+    series_by_indicator = {
+        "CPI": {
+            "actual": "CUUR0000SA0",
+            "core_actual": "CUUR0000SA0L1E",
+        },
+        "PPI": {
+            "actual": "WPSFD4",
+        },
+        "Employment Situation": {
+            "actual": "CES0000000001",
+            "core_actual": "CES0500000003",
+        },
+    }
+    series_ids = series_by_indicator.get(indicator)
+    if not series_ids:
+        return {}
+    payload = json.dumps({
+        "seriesid": list(series_ids.values()),
+        "startyear": str(datetime.now(timezone.utc).year - 2),
+        "endyear": str(datetime.now(timezone.utc).year),
+    }).encode("utf-8")
+    request = urllib.request.Request(
+        BLS_API_URL,
+        data=payload,
+        headers={"Content-Type": "application/json", "Accept": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(request, timeout=30) as response:
+        result = json.loads(response.read().decode("utf-8"))
+    if result.get("status") != "REQUEST_SUCCEEDED":
+        raise RuntimeError(f"BLS API no confirmó la consulta: {result}")
+    by_id = {series.get("seriesID"): series for series in (result.get("Results", {}).get("series") or [])}
+    snapshot = {}
+    for field, series_id in series_ids.items():
+        observations = [
+            item for item in (by_id.get(series_id, {}).get("data") or [])
+            if item.get("period", "").startswith("M") and item.get("period") != "M13"
+        ]
+        if not observations:
+            continue
+        latest = observations[0]
+        previous = observations[1] if len(observations) > 1 else None
+        snapshot[field] = {
+            "actual": latest.get("value"),
+            "previous": previous.get("value") if previous else None,
+            "year": latest.get("year"),
+            "period": latest.get("period"),
+            "source": "BLS Public Data API",
+            "status": "confirmed",
+        }
+    return snapshot
 
 
 def read_bea_macro_calendar(year=None):
