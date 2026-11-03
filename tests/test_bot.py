@@ -39,6 +39,19 @@ class BotStateTests(unittest.TestCase):
             self.assertNotIn("news-0", saved["published_messages"])
 
 
+    def test_format_weekly_report_includes_bea_agenda(self):
+        report = bot.format_weekly_report(
+            {"published_messages": {}},
+            [{"title": "Reunión FOMC · December 8-9 2026"}],
+            [],
+            [{
+                "title": "GDP (Advance Estimate) · November 25, 2026",
+                "date": "November 25, 2026 · 08:30 AM ET",
+            }],
+        )
+        self.assertIn("Agenda macroeconómica próxima · BEA", report)
+        self.assertIn("GDP (Advance Estimate)", report)
+
 class MessageTests(unittest.TestCase):
     def test_build_message_preserves_source_and_link(self):
         message = bot.build_message(
