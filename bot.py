@@ -568,10 +568,29 @@ def read_bls_macro_calendar(year=None):
         if key in seen:
             continue
         seen.add(key)
+        normalized_title = title.lower()
+        if "consumer price index" in normalized_title:
+            indicator = "CPI"
+        elif "producer price index" in normalized_title:
+            indicator = "PPI"
+        elif "employment situation" in normalized_title:
+            indicator = "Employment Situation"
+        elif "job openings" in normalized_title:
+            indicator = "JOLTS"
+        else:
+            indicator = title
         agenda.append({
             "title": f"{title} · {month_name} {day}, {item_year}",
             "date": f"{month_name} {day}, {item_year} · {release_time} ET",
             "start_date": start_date.isoformat(),
+            "indicator": indicator,
+            "previous": None,
+            "expected": None,
+            "actual": None,
+            "core_previous": None,
+            "core_expected": None,
+            "core_actual": None,
+            "status": "scheduled",
             "source": "U.S. Bureau of Labor Statistics",
             "link": schedule_url,
         })
