@@ -16,6 +16,25 @@
     "binance:https://www.binance.com/en/support/announcement/c5a8729a97ac486d963784d96c5642d7|security incident update 2026 10 30",
     "treasury:https://home.treasury.gov/node/985296",
     "binance:https://www.binance.com/en/support/announcement/73911fb819b240f88b88256bdd318eda|security incident recovery update 4 withdrawals resume in phases 2026 11 01",
-    "treasury:https://home.treasury.gov/node/985766"
+    "treasury:https://home.treasury.gov/node/985766",
+    "binance:https://www.binance.com/en/support/announcement/2d83c325ab6e49c6bd6c5de8803b11a6|security incident recovery update 6 withdrawals reopen for more assets 2026 11 03",
+    "tech:Microsoft AI:https://www.microsoft.com/en-us/microsoft-cloud/blog/general/2026/10/29/accelerating-frontier-transformation-reshape-business-processes/"
+  ],
+  "published_messages": {
+    "binance:https://www.binance.com/en/support/announcement/2d83c325ab6e49c6bd6c5de8803b11a6|security incident recovery update 6 withdrawals reopen for more assets 2026 11 03": {
+      "source": "Binance",
+      "title": "Security Incident | Recovery Update #6: Withdrawals Reopen for More Assets (2026-11-03)",
+      "relevance": "ALTA",
+      "telegram_message_id": 675,
+      "telegram_chat_id": -1003754072182,
+      "telegram_date": 1793720842,
+      "recorded_at": "2026-11-03T15:47:22.769362+00:00"
+    }
+  },
+  "alert_checked_ids": [
+    "coinbase:sgsgw21dz2jb:28n4jd75yxs0",
+    "binance:https://www.binance.com/en/support/announcement/2d83c325ab6e49c6bd6c5de8803b11a6|security incident recovery update 6 withdrawals reopen for more assets 2026 11 03",
+    "tech:OpenAI News:https://openai.com/index/heimstaden",
+    "tech:Google AI:https://blog.google/innovation-and-ai/technology/ai/google-ai-updates-october-2026/"
   ]
 }
