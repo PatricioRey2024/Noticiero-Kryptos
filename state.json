@@ -18,7 +18,10 @@
     "binance:https://www.binance.com/en/support/announcement/73911fb819b240f88b88256bdd318eda|security incident recovery update 4 withdrawals resume in phases 2026 11 01",
     "treasury:https://home.treasury.gov/node/985766",
     "binance:https://www.binance.com/en/support/announcement/2d83c325ab6e49c6bd6c5de8803b11a6|security incident recovery update 6 withdrawals reopen for more assets 2026 11 03",
-    "tech:Microsoft AI:https://www.microsoft.com/en-us/microsoft-cloud/blog/general/2026/10/29/accelerating-frontier-transformation-reshape-business-processes/"
+    "tech:Microsoft AI:https://www.microsoft.com/en-us/microsoft-cloud/blog/general/2026/10/29/accelerating-frontier-transformation-reshape-business-processes/",
+    "coinbase:sgsgw21dz2jb:28n4jd75yxs0",
+    "tech:OpenAI News:https://openai.com/index/heimstaden",
+    "tech:Google AI:https://blog.google/innovation-and-ai/technology/ai/google-ai-updates-october-2026/"
   ],
   "published_messages": {
     "binance:https://www.binance.com/en/support/announcement/2d83c325ab6e49c6bd6c5de8803b11a6|security incident recovery update 6 withdrawals reopen for more assets 2026 11 03": {
@@ -29,6 +32,15 @@
       "telegram_chat_id": -1003754072182,
       "telegram_date": 1793720842,
       "recorded_at": "2026-11-03T15:47:22.769362+00:00"
+    },
+    "tech:OpenAI News:https://openai.com/index/heimstaden": {
+      "source": "OpenAI News",
+      "title": "Heimstaden is changing residential real estate management with AI",
+      "relevance": "MEDIA",
+      "telegram_message_id": 678,
+      "telegram_chat_id": -1003754072182,
+      "telegram_date": 1793721138,
+      "recorded_at": "2026-11-03T15:52:19.082192+00:00"
     }
   },
   "alert_checked_ids": [
