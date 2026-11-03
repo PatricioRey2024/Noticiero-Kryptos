@@ -668,6 +668,25 @@ def read_bea_macro_calendar(year=None):
     return events
 
 
+def format_macro_value(value, pending_label="N/D"):
+    if value is None or value == "":
+        return pending_label
+    return str(value)
+
+
+def format_macro_event(event):
+    return (
+        f"• {event['title']}\n"
+        f"  Anterior: {format_macro_value(event.get('previous'))} · "
+        f"Esperado: {format_macro_value(event.get('expected'))} · "
+        f"Real: {format_macro_value(event.get('actual'), 'pendiente')}\n"
+        f"  Core anterior: {format_macro_value(event.get('core_previous'))} · "
+        f"Core esperado: {format_macro_value(event.get('core_expected'))} · "
+        f"Core real: {format_macro_value(event.get('core_actual'), 'pendiente')}\n"
+        f"  Estado: {event.get('status', 'scheduled')} · {event.get('source', 'fuente no disponible')}"
+    )
+
+
 def format_weekly_report(state, agenda, macro_agenda=None, bea_agenda=None):
     now = datetime.now(timezone.utc)
     cutoff = now - timedelta(days=7)
@@ -695,14 +714,14 @@ def format_weekly_report(state, agenda, macro_agenda=None, bea_agenda=None):
     lines.append("📈 Agenda macroeconómica próxima · BLS")
     if macro_agenda:
         for event in macro_agenda[:10]:
-            lines.append(f"• {event['title']} · {event['date'].split(' · ')[-1]}")
+            lines.append(format_macro_event(event))
     else:
         lines.append("• No se pudo consultar el calendario BLS en esta ejecución.")
     lines.append("")
     lines.append("🏛️ Agenda macroeconómica próxima · BEA")
     if bea_agenda:
         for event in bea_agenda[:8]:
-            lines.append(f"• {event['title']} · {event['date'].split(' · ')[-1]}")
+            lines.append(format_macro_event(event))
     else:
         lines.append("• No se pudo consultar el calendario BEA en esta ejecución.")
     lines.append("")
