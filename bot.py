@@ -26,6 +26,7 @@ ALTERNATIVE_ME_FNG_URL = "https://api.alternative.me/fng/?limit=1"
 YAHOO_CHART_URL = "https://query1.finance.yahoo.com/v8/finance/chart/"
 FOMC_CALENDAR_URL = "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm"
 BLS_SCHEDULE_URL = "https://www.bls.gov/schedule/{year}/"
+BEA_SCHEDULE_URL = "https://www.bea.gov/news/schedule/"
 
 BLS_FEEDS = [
     ("BLS - Inflación CPI", "https://www.bls.gov/feed/cpi.rss"),
@@ -580,7 +581,75 @@ def read_bls_macro_calendar(year=None):
     return agenda
 
 
-def format_weekly_report(state, agenda, macro_agenda=None):
+def read_bea_macro_calendar(year=None):
+    """Lee el calendario oficial del BEA sin inventar consenso de mercado."""
+    year = year or datetime.now(timezone.utc).year
+    request = urllib.request.Request(BEA_SCHEDULE_URL, headers=rss_headers())
+    with urllib.request.urlopen(request, timeout=30) as response:
+        html = response.read().decode("utf-8", errors="replace")
+    text = unescape(re.sub(r"<[^>]+>", " ", html))
+    text = re.sub(r"\s+", " ", text)
+    month_names = (
+        "January|February|March|April|May|June|July|August|September|"
+        "October|November|December"
+    )
+    release_pattern = re.compile(
+        rf"({month_names})\s+(\d{{1,2}})\s+(\d{{1,2}}:\d{{2}}\s+[AP]M)\s+(.+?)(?=(?:{month_names})\s+\d{{1,2}}\s+\d{{1,2}}:\d{{2}}\s+[AP]M|To Be Announced|$)",
+        re.IGNORECASE,
+    )
+    relevant_titles = (
+        "GDP",
+        "Personal Income and Outlays",
+        "Personal Income",
+        "Personal Consumption Expenditures",
+        "PCE",
+        "Corporate Profits",
+    )
+    month_numbers = {
+        name: index for index, name in enumerate(
+            ("January", "February", "March", "April", "May", "June",
+             "July", "August", "September", "October", "November", "December"),
+            start=1,
+        )
+    }
+    today = datetime.now(timezone.utc).date()
+    events = []
+    seen = set()
+    for match in release_pattern.finditer(text):
+        month_name, day, release_time, title = match.groups()
+        title = re.sub(r"\s+", " ", title).strip()
+        if not any(keyword.lower() in title.lower() for keyword in relevant_titles):
+            continue
+        start_date = datetime(year, month_numbers[month_name.title()], int(day)).date()
+        if start_date < today:
+            continue
+        key = (start_date.isoformat(), title)
+        if key in seen:
+            continue
+        seen.add(key)
+        indicator = "GDP" if "GDP" in title else "PCE/Ingresos y gastos personales"
+        events.append({
+            "title": f"{title} · {month_name} {day}, {year}",
+            "date": f"{month_name} {day}, {year} · {release_time} ET",
+            "start_date": start_date.isoformat(),
+            "indicator": indicator,
+            "previous": None,
+            "expected": None,
+            "actual": None,
+            "core_previous": None,
+            "core_expected": None,
+            "core_actual": None,
+            "status": "scheduled",
+            "source": "U.S. Bureau of Economic Analysis",
+            "link": BEA_SCHEDULE_URL,
+        })
+    events.sort(key=lambda item: item["start_date"])
+    if not events:
+        raise RuntimeError("El calendario BEA no devolvió eventos futuros de PIB o PCE.")
+    return events
+
+
+def format_weekly_report(state, agenda, macro_agenda=None, bea_agenda=None):
     now = datetime.now(timezone.utc)
     cutoff = now - timedelta(days=7)
     recent = []
@@ -611,10 +680,18 @@ def format_weekly_report(state, agenda, macro_agenda=None):
     else:
         lines.append("• No se pudo consultar el calendario BLS en esta ejecución.")
     lines.append("")
+    lines.append("🏛️ Agenda macroeconómica próxima · BEA")
+    if bea_agenda:
+        for event in bea_agenda[:8]:
+            lines.append(f"• {event['title']} · {event['date'].split(' · ')[-1]}")
+    else:
+        lines.append("• No se pudo consultar el calendario BEA en esta ejecución.")
+    lines.append("")
     lines.append("⚖️ Alcance")
     lines.append("Resumen informativo basado en publicaciones registradas y calendario oficial.")
     lines.append(f"🔗 Fuente del calendario: {FOMC_CALENDAR_URL}")
     lines.append(f"🔗 Fuente macroeconómica: {BLS_SCHEDULE_URL.format(year=now.year)}")
+    lines.append(f"🔗 Fuente BEA: {BEA_SCHEDULE_URL}")
     return "\n".join(lines)
 
 
@@ -965,7 +1042,13 @@ def main():
                 print(f"Calendario BLS: {len(macro_agenda)} eventos futuros recibidos.")
             except Exception as error:
                 print(f"Calendario BLS no disponible: {error}")
-            weekly_report = format_weekly_report(state, agenda, macro_agenda)
+            bea_agenda = []
+            try:
+                bea_agenda = read_bea_macro_calendar()
+                print(f"Calendario BEA: {len(bea_agenda)} eventos futuros recibidos.")
+            except Exception as error:
+                print(f"Calendario BEA no disponible: {error}")
+            weekly_report = format_weekly_report(state, agenda, macro_agenda, bea_agenda)
             delivery = send_message(weekly_report)
             print(
                 "Informe semanal enviado a Telegram. "
