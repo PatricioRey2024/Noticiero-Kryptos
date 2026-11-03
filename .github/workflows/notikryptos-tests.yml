@@ -1,0 +1,32 @@
+name: NotiKryptos - Pruebas
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches:
+      - codex/macro-bea-datos-estructurados
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar código
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validar sintaxis
+        run: python -m py_compile bot.py
+
+      - name: Ejecutar pruebas
+        run: python -m unittest discover -s tests -v
+
+      - name: Revisar espacios problemáticos
+        run: git diff --check
