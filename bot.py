@@ -727,6 +727,26 @@ def read_bea_macro_calendar(year=None):
     return events
 
 
+def format_official_macro_snapshot():
+    lines = ["📌 Últimos datos macroeconómicos oficiales", ""]
+    for indicator in ("CPI", "PPI", "Employment Situation"):
+        snapshot = read_bls_official_snapshot(indicator)
+        if not snapshot:
+            continue
+        lines.append(f"{indicator}")
+        for field, label in (("actual", "Real"), ("previous", "Anterior"), ("core_actual", "Core")):
+            values = [item for item in snapshot.values() if item.get(field) is not None]
+            if values:
+                item = values[0]
+                lines.append(f"• {label}: {item.get(field)} · {item.get('year')}-{item.get('period')}")
+        lines.append("• Estado: ✅ CONFIRMADO · fuente oficial BLS")
+        lines.append("")
+    if len(lines) == 2:
+        return ""
+    lines.append("🔗 Fuente: BLS Public Data API")
+    return "\\n".join(lines)
+
+
 def format_macro_value(value, pending_label="N/D"):
     if value is None or value == "":
         return pending_label
@@ -1146,6 +1166,12 @@ def main():
             except Exception as error:
                 print(f"Calendario BEA no disponible: {error}")
             weekly_report = format_weekly_report(state, agenda, macro_agenda, bea_agenda)
+            try:
+                official_snapshot = format_official_macro_snapshot()
+                if official_snapshot:
+                    weekly_report = weekly_report + "\\n\\n" + official_snapshot
+            except Exception as error:
+                print(f"Datos macro oficiales no disponibles: {error}")
             delivery = send_message(weekly_report)
             print(
                 "Informe semanal enviado a Telegram. "
