@@ -25,6 +25,7 @@ CMC_ALTCOIN_SEASON_URL = "https://pro-api.coinmarketcap.com/v1/altcoin-season-in
 ALTERNATIVE_ME_FNG_URL = "https://api.alternative.me/fng/?limit=1"
 YAHOO_CHART_URL = "https://query1.finance.yahoo.com/v8/finance/chart/"
 FOMC_CALENDAR_URL = "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm"
+BLS_SCHEDULE_URL = "https://www.bls.gov/schedule/{year}/"
 
 BLS_FEEDS = [
     ("BLS - Inflación CPI", "https://www.bls.gov/feed/cpi.rss"),
@@ -510,7 +511,76 @@ def read_fomc_agenda(year=None):
     return agenda
 
 
-def format_weekly_report(state, agenda):
+def read_bls_macro_calendar(year=None):
+    """Lee el calendario oficial de publicaciones macroeconómicas del BLS.
+
+    Los RSS de CPI y Employment Situation informan publicaciones ya emitidas;
+    este calendario permite conocer fechas futuras sin depender de un proveedor
+    comercial ni de una API de pago.
+    """
+    year = year or datetime.now(timezone.utc).year
+    schedule_url = BLS_SCHEDULE_URL.format(year=year)
+    request = urllib.request.Request(schedule_url, headers=rss_headers())
+    with urllib.request.urlopen(request, timeout=30) as response:
+        html = response.read().decode("utf-8", errors="replace")
+    text = unescape(re.sub(r"<[^>]+>", " ", html))
+    text = re.sub(r"\s+", " ", text)
+    weekdays = "Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday"
+    month_names = (
+        "January|February|March|April|May|June|July|August|September|"
+        "October|November|December"
+    )
+    release_pattern = re.compile(
+        rf"(?:{weekdays}),?\s+({month_names})\s+(\d{{1,2}}),\s+(\d{{4}})\s+"
+        rf"(\d{{1,2}}:\d{{2}}\s+[AP]M)\s+(.+?)(?=(?:{weekdays}),?\s+"
+        rf"(?:{month_names})\s+\d{{1,2}},\s+\d{{4}}\s+|NOTE:|$)",
+        re.IGNORECASE,
+    )
+    relevant_titles = (
+        "Consumer Price Index",
+        "Employment Situation",
+        "Producer Price Index",
+        "Job Openings and Labor Turnover Survey",
+        "Productivity and Costs",
+        "Import and Export Price Indexes",
+    )
+    month_numbers = {
+        name: index for index, name in enumerate(
+            ("January", "February", "March", "April", "May", "June",
+             "July", "August", "September", "October", "November", "December"),
+            start=1,
+        )
+    }
+    today = datetime.now(timezone.utc).date()
+    agenda = []
+    seen = set()
+    for match in release_pattern.finditer(text):
+        month_name, day, item_year, release_time, title = match.groups()
+        title = re.sub(r"\s+", " ", title).strip()
+        if not any(keyword.lower() in title.lower() for keyword in relevant_titles):
+            continue
+        item_year = int(item_year)
+        start_date = datetime(item_year, month_numbers[month_name.title()], int(day)).date()
+        if start_date < today:
+            continue
+        key = (start_date.isoformat(), title)
+        if key in seen:
+            continue
+        seen.add(key)
+        agenda.append({
+            "title": f"{title} · {month_name} {day}, {item_year}",
+            "date": f"{month_name} {day}, {item_year} · {release_time} ET",
+            "start_date": start_date.isoformat(),
+            "source": "U.S. Bureau of Labor Statistics",
+            "link": schedule_url,
+        })
+    agenda.sort(key=lambda item: item["start_date"])
+    if not agenda:
+        raise RuntimeError("El calendario BLS no devolvió eventos macroeconómicos futuros.")
+    return agenda
+
+
+def format_weekly_report(state, agenda, macro_agenda=None):
     now = datetime.now(timezone.utc)
     cutoff = now - timedelta(days=7)
     recent = []
@@ -534,9 +604,17 @@ def format_weekly_report(state, agenda):
     for event in agenda[:6]:
         lines.append(f"• {event['title']}")
     lines.append("")
+    lines.append("📈 Agenda macroeconómica próxima · BLS")
+    if macro_agenda:
+        for event in macro_agenda[:10]:
+            lines.append(f"• {event['title']} · {event['date'].split(' · ')[-1]}")
+    else:
+        lines.append("• No se pudo consultar el calendario BLS en esta ejecución.")
+    lines.append("")
     lines.append("⚖️ Alcance")
     lines.append("Resumen informativo basado en publicaciones registradas y calendario oficial.")
     lines.append(f"🔗 Fuente del calendario: {FOMC_CALENDAR_URL}")
+    lines.append(f"🔗 Fuente macroeconómica: {BLS_SCHEDULE_URL.format(year=now.year)}")
     return "\n".join(lines)
 
 
@@ -881,7 +959,13 @@ def main():
     if run_mode == "weekly":
         try:
             agenda = read_fomc_agenda()
-            weekly_report = format_weekly_report(state, agenda)
+            macro_agenda = []
+            try:
+                macro_agenda = read_bls_macro_calendar()
+                print(f"Calendario BLS: {len(macro_agenda)} eventos futuros recibidos.")
+            except Exception as error:
+                print(f"Calendario BLS no disponible: {error}")
+            weekly_report = format_weekly_report(state, agenda, macro_agenda)
             delivery = send_message(weekly_report)
             print(
                 "Informe semanal enviado a Telegram. "
