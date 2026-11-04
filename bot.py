@@ -476,11 +476,11 @@ def format_directional_change(value):
     if value is None:
         return "N/D"
     if value > 0.05:
-        marker = "🟩"
+        marker = "📈"
     elif value < -0.05:
-        marker = "🟥"
+        marker = "📉"
     else:
-        marker = "🟦"
+        marker = "➡️"
     return f"{marker} {format_market_change(value)}"
 
 
@@ -864,17 +864,40 @@ def format_macro_value(value, pending_label="N/D"):
 
 
 def format_macro_event(event):
-    return (
-        f"• {event['title']}\n"
-        f"  Anterior: {format_macro_value(event.get('previous'))} · "
-        f"Esperado: {format_macro_value(event.get('expected'))} · "
-        f"Real: {format_macro_value(event.get('actual'), 'pendiente')}\n"
-        f"  Core anterior: {format_macro_value(event.get('core_previous'))} · "
-        f"Core esperado: {format_macro_value(event.get('core_expected'))} · "
-        f"Core real: {format_macro_value(event.get('core_actual'), 'pendiente')}\n"
-        f"  Estado: {event.get('status', 'scheduled')} · {event.get('source', 'fuente no disponible')}"
+    source = event.get("source", "fuente no disponible")
+    is_bea = "Economic Analysis" in source
+    section = "🏛️ BEA · ACTIVIDAD ECONÓMICA" if is_bea else "📈 BLS · INDICADORES MACRO"
+    lines = [
+        section,
+        "",
+        f"🗓️ {event.get('title', 'Evento macroeconómico')}",
+    ]
+    if event.get("date"):
+        lines.append(f"📅 {event['date']}")
+    lines.extend([
+        "",
+        f"Anterior: {format_macro_value(event.get('previous'))}",
+        f"Esperado: {format_macro_value(event.get('expected'))}",
+        f"Real: {format_macro_value(event.get('actual'), 'pendiente')}",
+    ])
+    has_core = any(
+        event.get(field) not in (None, "")
+        for field in ("core_previous", "core_expected", "core_actual")
     )
-
+    if has_core:
+        lines.extend([
+            "",
+            "Core",
+            f"Anterior: {format_macro_value(event.get('core_previous'))}",
+            f"Esperado: {format_macro_value(event.get('core_expected'))}",
+            f"Real: {format_macro_value(event.get('core_actual'), 'pendiente')}",
+        ])
+    lines.extend([
+        "",
+        f"Estado: 🟡 PROGRAMADO · {event.get('status', 'scheduled')}",
+        f"Fuente: {source}",
+    ])
+    return "\n".join(lines)
 
 def format_weekly_report(state, agenda, macro_agenda=None, bea_agenda=None):
     now = datetime.now(timezone.utc)
@@ -900,19 +923,23 @@ def format_weekly_report(state, agenda, macro_agenda=None, bea_agenda=None):
     for event in agenda[:6]:
         lines.append(f"• {event['title']}")
     lines.append("")
-    lines.append("📈 Agenda macroeconómica próxima · BLS")
+    lines.append("📈 BLS · AGENDA MACROECONÓMICA")
+    lines.append("────────────────────")
     if macro_agenda:
         for event in macro_agenda[:10]:
             lines.append(format_macro_event(event))
+            lines.append("────────────────────")
     else:
-        lines.append("• No se pudo consultar el calendario BLS en esta ejecución.")
+        lines.append("No se pudo consultar el calendario BLS en esta ejecución.")
     lines.append("")
-    lines.append("🏛️ Agenda macroeconómica próxima · BEA")
+    lines.append("🏛️ BEA · AGENDA MACROECONÓMICA")
+    lines.append("────────────────────")
     if bea_agenda:
         for event in bea_agenda[:8]:
             lines.append(format_macro_event(event))
+            lines.append("────────────────────")
     else:
-        lines.append("• No se pudo consultar el calendario BEA en esta ejecución.")
+        lines.append("No se pudo consultar el calendario BEA en esta ejecución.")
     lines.append("")
     lines.append("⚖️ Alcance")
     lines.append("Resumen informativo basado en publicaciones registradas y calendario oficial.")
