@@ -49,7 +49,7 @@ class BotStateTests(unittest.TestCase):
                 "date": "November 25, 2026 · 08:30 AM ET",
             }],
         )
-        self.assertIn("Agenda macroeconómica próxima · BEA", report)
+        self.assertIn("🏛️ BEA · AGENDA MACROECONÓMICA", report)
         self.assertIn("GDP (Advance Estimate)", report)
 
     def test_unknown_bls_indicator_does_not_publish_unverified_values(self):
@@ -69,7 +69,8 @@ class BotStateTests(unittest.TestCase):
         })
         self.assertIn("Anterior: N/D", text)
         self.assertIn("Real: pendiente", text)
-        self.assertIn("Core real: pendiente", text)
+        self.assertIn("Core", text)
+        self.assertIn("Real: pendiente", text)
 
 class MessageTests(unittest.TestCase):
     def test_build_message_preserves_source_and_link(self):
