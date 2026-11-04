@@ -372,7 +372,7 @@ def format_coinmarketcap_snapshot(market_data, four_hour_changes=None):
         price = usd.get("price")
         price_text = format_market_number(price)
         four_hour = four_hour_changes.get(symbol)
-        lines.append(f"{"\$"}{symbol}: {"\$"}{price_text}")
+        lines.append(f"{symbol}: $" + price_text)
         lines.append(
             f"1 h: {format_market_change(usd.get('percent_change_1h'))} · "
             f"4 h: {format_market_change(four_hour)} · "
