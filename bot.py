@@ -443,12 +443,12 @@ def format_market_change(value):
 
 def market_direction(change_percent):
     if change_percent is None:
-        return "⚪➡️"
+        return "🟦►"
     if change_percent > 0.05:
-        return "🟢⬆️"
+        return "🟩▲"
     if change_percent < -0.05:
-        return "🔴⬇️"
-    return "⚪➡️"
+        return "🟥▼"
+    return "🟦►"
 
 
 def format_extended_market_context(sentiment, traditional_market):
