@@ -969,7 +969,13 @@ def format_macro_event(event):
             f"Variación mensual anterior: {format_percent(event.get('previous_monthly_change'))}",
             f"Variación interanual anterior: {format_percent(event.get('previous_yearly_change'))}",
         ])
-    has_core = any(event.get(field) not in (None, "") for field in ("core_previous", "core_expected", "core_actual"))
+    has_core = (
+        not is_bea
+        and any(
+            indicator in event.get("title", "")
+            for indicator in ("Consumer Price Index", "Producer Price Index", "Employment Situation")
+        )
+    )
     if has_core:
         lines.extend([
             "",
