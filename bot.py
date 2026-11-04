@@ -414,13 +414,41 @@ def read_yahoo_market_data():
         if not valid:
             raise RuntimeError(f"Yahoo Finance devolvió una cotización vacía para {label}.")
         timestamp, close = valid[-1]
+        previous_close = valid[-2][1] if len(valid) >= 2 else None
+        change_percent = None
+        if previous_close not in (None, 0):
+            change_percent = ((close - previous_close) / previous_close) * 100
         market[label] = {
             "timestamp": timestamp,
             "close": close,
+            "previous_close": previous_close,
+            "change_percent": change_percent,
             "source": "Yahoo Finance chart",
             "symbol": symbol,
         }
     return market
+
+
+def format_market_number(value):
+    if value is None:
+        return "N/D"
+    return f"{float(value):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def format_market_change(value):
+    if value is None:
+        return "N/D"
+    return f"{float(value):+,.2f}%".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def market_direction(change_percent):
+    if change_percent is None:
+        return "⚪➡️"
+    if change_percent > 0.05:
+        return "🟢⬆️"
+    if change_percent < -0.05:
+        return "🔴⬇️"
+    return "⚪➡️"
 
 
 def format_extended_market_context(sentiment, traditional_market):
@@ -428,10 +456,14 @@ def format_extended_market_context(sentiment, traditional_market):
     lines.append("📈 Mercados tradicionales")
     for label, item in traditional_market.items():
         updated = datetime.fromtimestamp(item["timestamp"], tz=timezone.utc)
+        change = item.get("change_percent")
+        direction = market_direction(change)
         lines.append(
-            f"{label}: {item['close']} ({updated.strftime('%Y-%m-%d %H:%M UTC')})"
+            f"{direction} {label}: {format_market_number(item.get('close'))} "
+            f"({format_market_change(change)}) · "
+            f"{updated.strftime('%Y-%m-%d %H:%M UTC')}"
         )
-    lines.append("Fuente de mercado: Yahoo Finance chart · último dato disponible")
+    lines.append("Flecha: variación frente al dato anterior · Yahoo Finance chart")
     lines.append("")
 
     fear_greed = sentiment.get("fear_greed") or {}
