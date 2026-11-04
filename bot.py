@@ -734,6 +734,41 @@ def read_bls_official_snapshot(indicator):
     return snapshot
 
 
+def enrich_bls_macro_calendar(events):
+    """Completa el dato anterior con la última observación oficial disponible."""
+    indicator_snapshots = {}
+    for indicator in ("CPI", "PPI", "Employment Situation"):
+        try:
+            indicator_snapshots[indicator] = read_bls_official_snapshot(indicator)
+        except Exception as error:
+            print(f"Datos BLS no disponibles para {indicator}: {error}")
+    for event in events:
+        title = event.get("title", "").lower()
+        if "consumer price index" in title:
+            indicator = "CPI"
+        elif "producer price index" in title:
+            indicator = "PPI"
+        elif "employment situation" in title:
+            indicator = "Employment Situation"
+        else:
+            continue
+        snapshot = indicator_snapshots.get(indicator, {})
+        actual = snapshot.get("actual", {})
+        core = snapshot.get("core_actual", {})
+        event["previous"] = actual.get("actual")
+        event["core_previous"] = core.get("actual")
+        event["expected"] = None
+        event["core_expected"] = None
+        event["actual"] = None
+        event["core_actual"] = None
+        event["status"] = "scheduled · anterior oficial disponible"
+        event["official_previous_period"] = (
+            f"{actual.get('year')}-{actual.get('period')}"
+            if actual.get("year") and actual.get("period") else None
+        )
+    return events
+
+
 def read_bea_macro_calendar(year=None):
     """Lee el calendario oficial del BEA sin inventar consenso de mercado."""
     year = year or datetime.now(timezone.utc).year
@@ -819,7 +854,7 @@ def format_official_macro_snapshot():
     if len(lines) == 2:
         return ""
     lines.append("🔗 Fuente: BLS Public Data API")
-    return "\\n".join(lines)
+    return "\n".join(lines)
 
 
 def format_macro_value(value, pending_label="N/D"):
@@ -1232,6 +1267,7 @@ def main():
             macro_agenda = []
             try:
                 macro_agenda = read_bls_macro_calendar()
+                macro_agenda = enrich_bls_macro_calendar(macro_agenda)
                 print(f"Calendario BLS: {len(macro_agenda)} eventos futuros recibidos.")
             except Exception as error:
                 print(f"Calendario BLS no disponible: {error}")
