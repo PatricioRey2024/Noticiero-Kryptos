@@ -22,6 +22,7 @@ BINANCE_URL = (
 CMC_URL = "https://pro-api.coinmarketcap.com/v3/cryptocurrency/quotes/latest"
 CMC_FEAR_GREED_URL = "https://pro-api.coinmarketcap.com/v3/fear-and-greed/latest"
 CMC_ALTCOIN_SEASON_URL = "https://pro-api.coinmarketcap.com/v1/altcoin-season-index/latest"
+BINANCE_KLINES_URL = "https://api.binance.com/api/v3/klines"
 ALTERNATIVE_ME_FNG_URL = "https://api.alternative.me/fng/?limit=1"
 YAHOO_CHART_URL = "https://query1.finance.yahoo.com/v8/finance/chart/"
 FOMC_CALENDAR_URL = "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm"
@@ -319,10 +320,37 @@ def read_coinmarketcap_market():
     return {"quotes": data}
 
 
-def format_coinmarketcap_snapshot(market_data):
+def read_binance_four_hour_changes():
+    """Calcula variaciones de 4 horas con velas públicas de Binance."""
+    symbols = {"BTC": "BTCUSDT", "ETH": "ETHUSDT", "SOL": "SOLUSDT", "NEAR": "NEARUSDT"}
+    changes = {}
+    for name, symbol in symbols.items():
+        query = urllib.parse.urlencode({
+            "symbol": symbol,
+            "interval": "1h",
+            "limit": 5,
+        })
+        request = urllib.request.Request(
+            f"{BINANCE_KLINES_URL}?{query}",
+            headers={"Accept": "application/json", "User-Agent": user_agent()},
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=20) as response:
+                candles = json.loads(response.read().decode("utf-8"))
+            closes = [float(candle[4]) for candle in candles if len(candle) > 4]
+            if len(closes) < 5 or closes[-5] == 0:
+                continue
+            changes[name] = ((closes[-1] - closes[-5]) / closes[-5]) * 100
+        except (urllib.error.HTTPError, urllib.error.URLError, ValueError, IndexError) as error:
+            print(f"Binance 4 h no disponible para {name}: {error}")
+    return changes
+
+
+def format_coinmarketcap_snapshot(market_data, four_hour_changes=None):
     lines = ["📊 Estado actual del mercado cripto", ""]
     names = {"1": "BTC", "1027": "ETH", "5426": "SOL", "6535": "NEAR"}
     quotes = market_data.get("quotes", {})
+    four_hour_changes = four_hour_changes or {}
     if isinstance(quotes, list):
         assets = [(asset.get("id", ""), asset) for asset in quotes]
     else:
@@ -341,13 +369,16 @@ def format_coinmarketcap_snapshot(market_data):
         if not isinstance(usd, dict):
             usd = {}
         symbol = names.get(str(asset_id), asset.get("symbol", "ACTIVO"))
-        price = usd.get("price", "N/D")
-        lines.append(f"{symbol}: ${price}")
+        price = usd.get("price")
+        price_text = format_market_number(price)
+        four_hour = four_hour_changes.get(symbol)
+        lines.append(f"{"\$"}{symbol}: {"\$"}{price_text}")
         lines.append(
-            f"1 h: {usd.get('percent_change_1h', 'N/D')}% · "
-            f"24 h: {usd.get('percent_change_24h', 'N/D')}% · "
-            f"7 d: {usd.get('percent_change_7d', 'N/D')}% · "
-            f"30 d: {usd.get('percent_change_30d', 'N/D')}%"
+            f"1 h: {format_market_change(usd.get('percent_change_1h'))} · "
+            f"4 h: {format_market_change(four_hour)} · "
+            f"24 h: {format_market_change(usd.get('percent_change_24h'))} · "
+            f"7 d: {format_market_change(usd.get('percent_change_7d'))} · "
+            f"30 d: {format_market_change(usd.get('percent_change_30d'))}"
         )
         lines.append("")
     return "\n".join(lines)
@@ -1144,7 +1175,8 @@ def main():
     market_snapshot = ""
     try:
         market_data = read_coinmarketcap_market()
-        market_snapshot = format_coinmarketcap_snapshot(market_data)
+        four_hour_changes = read_binance_four_hour_changes()
+        market_snapshot = format_coinmarketcap_snapshot(market_data, four_hour_changes)
         print(market_snapshot)
     except urllib.error.HTTPError as error:
         body = error.read().decode("utf-8", errors="replace")
