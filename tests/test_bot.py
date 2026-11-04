@@ -39,6 +39,38 @@ class BotStateTests(unittest.TestCase):
             self.assertNotIn("news-0", saved["published_messages"])
 
 
+    def test_format_weekly_report_includes_bea_agenda(self):
+        report = bot.format_weekly_report(
+            {"published_messages": {}},
+            [{"title": "Reunión FOMC · December 8-9 2026"}],
+            [],
+            [{
+                "title": "GDP (Advance Estimate) · November 25, 2026",
+                "date": "November 25, 2026 · 08:30 AM ET",
+            }],
+        )
+        self.assertIn("Agenda macroeconómica próxima · BEA", report)
+        self.assertIn("GDP (Advance Estimate)", report)
+
+    def test_unknown_bls_indicator_does_not_publish_unverified_values(self):
+        self.assertEqual(bot.read_bls_official_snapshot("GDP"), {})
+
+    def test_format_macro_event_keeps_missing_values_explicit(self):
+        text = bot.format_macro_event({
+            "title": "CPI · November 10, 2026",
+            "previous": None,
+            "expected": None,
+            "actual": None,
+            "core_previous": None,
+            "core_expected": None,
+            "core_actual": None,
+            "status": "scheduled",
+            "source": "BLS",
+        })
+        self.assertIn("Anterior: N/D", text)
+        self.assertIn("Real: pendiente", text)
+        self.assertIn("Core real: pendiente", text)
+
 class MessageTests(unittest.TestCase):
     def test_build_message_preserves_source_and_link(self):
         message = bot.build_message(

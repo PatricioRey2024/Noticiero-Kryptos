@@ -22,10 +22,13 @@ BINANCE_URL = (
 CMC_URL = "https://pro-api.coinmarketcap.com/v3/cryptocurrency/quotes/latest"
 CMC_FEAR_GREED_URL = "https://pro-api.coinmarketcap.com/v3/fear-and-greed/latest"
 CMC_ALTCOIN_SEASON_URL = "https://pro-api.coinmarketcap.com/v1/altcoin-season-index/latest"
+BINANCE_KLINES_URL = "https://api.binance.com/api/v3/klines"
 ALTERNATIVE_ME_FNG_URL = "https://api.alternative.me/fng/?limit=1"
 YAHOO_CHART_URL = "https://query1.finance.yahoo.com/v8/finance/chart/"
 FOMC_CALENDAR_URL = "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm"
 BLS_SCHEDULE_URL = "https://www.bls.gov/schedule/{year}/"
+BEA_SCHEDULE_URL = "https://www.bea.gov/news/schedule/"
+BLS_API_URL = "https://api.bls.gov/publicAPI/v1/timeseries/data/"
 
 BLS_FEEDS = [
     ("BLS - Inflación CPI", "https://www.bls.gov/feed/cpi.rss"),
@@ -317,10 +320,37 @@ def read_coinmarketcap_market():
     return {"quotes": data}
 
 
-def format_coinmarketcap_snapshot(market_data):
+def read_binance_four_hour_changes():
+    """Calcula variaciones de 4 horas con velas públicas de Binance."""
+    symbols = {"BTC": "BTCUSDT", "ETH": "ETHUSDT", "SOL": "SOLUSDT", "NEAR": "NEARUSDT"}
+    changes = {}
+    for name, symbol in symbols.items():
+        query = urllib.parse.urlencode({
+            "symbol": symbol,
+            "interval": "1h",
+            "limit": 5,
+        })
+        request = urllib.request.Request(
+            f"{BINANCE_KLINES_URL}?{query}",
+            headers={"Accept": "application/json", "User-Agent": user_agent()},
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=20) as response:
+                candles = json.loads(response.read().decode("utf-8"))
+            closes = [float(candle[4]) for candle in candles if len(candle) > 4]
+            if len(closes) < 5 or closes[-5] == 0:
+                continue
+            changes[name] = ((closes[-1] - closes[-5]) / closes[-5]) * 100
+        except (urllib.error.HTTPError, urllib.error.URLError, ValueError, IndexError) as error:
+            print(f"Binance 4 h no disponible para {name}: {error}")
+    return changes
+
+
+def format_coinmarketcap_snapshot(market_data, four_hour_changes=None):
     lines = ["📊 Estado actual del mercado cripto", ""]
     names = {"1": "BTC", "1027": "ETH", "5426": "SOL", "6535": "NEAR"}
     quotes = market_data.get("quotes", {})
+    four_hour_changes = four_hour_changes or {}
     if isinstance(quotes, list):
         assets = [(asset.get("id", ""), asset) for asset in quotes]
     else:
@@ -339,13 +369,16 @@ def format_coinmarketcap_snapshot(market_data):
         if not isinstance(usd, dict):
             usd = {}
         symbol = names.get(str(asset_id), asset.get("symbol", "ACTIVO"))
-        price = usd.get("price", "N/D")
-        lines.append(f"{symbol}: ${price}")
+        price = usd.get("price")
+        price_text = format_market_number(price)
+        four_hour = four_hour_changes.get(symbol)
+        lines.append(f"{symbol}: $" + price_text)
         lines.append(
-            f"1 h: {usd.get('percent_change_1h', 'N/D')}% · "
-            f"24 h: {usd.get('percent_change_24h', 'N/D')}% · "
-            f"7 d: {usd.get('percent_change_7d', 'N/D')}% · "
-            f"30 d: {usd.get('percent_change_30d', 'N/D')}%"
+            f"1 h: {format_directional_change(usd.get('percent_change_1h'))} · "
+            f"4 h: {format_directional_change(four_hour)} · "
+            f"24 h: {format_directional_change(usd.get('percent_change_24h'))} · "
+            f"7 d: {format_directional_change(usd.get('percent_change_7d'))} · "
+            f"30 d: {format_directional_change(usd.get('percent_change_30d'))}"
         )
         lines.append("")
     return "\n".join(lines)
@@ -412,13 +445,53 @@ def read_yahoo_market_data():
         if not valid:
             raise RuntimeError(f"Yahoo Finance devolvió una cotización vacía para {label}.")
         timestamp, close = valid[-1]
+        previous_close = valid[-2][1] if len(valid) >= 2 else None
+        change_percent = None
+        if previous_close not in (None, 0):
+            change_percent = ((close - previous_close) / previous_close) * 100
         market[label] = {
             "timestamp": timestamp,
             "close": close,
+            "previous_close": previous_close,
+            "change_percent": change_percent,
             "source": "Yahoo Finance chart",
             "symbol": symbol,
         }
     return market
+
+
+def format_market_number(value):
+    if value is None:
+        return "N/D"
+    return f"{float(value):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def format_market_change(value):
+    if value is None:
+        return "N/D"
+    return f"{float(value):+,.2f}%".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def format_directional_change(value):
+    if value is None:
+        return "N/D"
+    if value > 0.05:
+        marker = "🟩"
+    elif value < -0.05:
+        marker = "🟥"
+    else:
+        marker = "🟦"
+    return f"{marker} {format_market_change(value)}"
+
+
+def market_direction(change_percent):
+    if change_percent is None:
+        return "🟦►"
+    if change_percent > 0.05:
+        return "🟩▲"
+    if change_percent < -0.05:
+        return "🟥▼"
+    return "🟦►"
 
 
 def format_extended_market_context(sentiment, traditional_market):
@@ -426,10 +499,14 @@ def format_extended_market_context(sentiment, traditional_market):
     lines.append("📈 Mercados tradicionales")
     for label, item in traditional_market.items():
         updated = datetime.fromtimestamp(item["timestamp"], tz=timezone.utc)
+        change = item.get("change_percent")
+        direction = market_direction(change)
         lines.append(
-            f"{label}: {item['close']} ({updated.strftime('%Y-%m-%d %H:%M UTC')})"
+            f"{direction} {label}: {format_market_number(item.get('close'))} "
+            f"({format_market_change(change)}) · "
+            f"{updated.strftime('%Y-%m-%d %H:%M UTC')}"
         )
-    lines.append("Fuente de mercado: Yahoo Finance chart · último dato disponible")
+    lines.append("Flecha: variación frente al dato anterior · Yahoo Finance chart")
     lines.append("")
 
     fear_greed = sentiment.get("fear_greed") or {}
@@ -567,10 +644,29 @@ def read_bls_macro_calendar(year=None):
         if key in seen:
             continue
         seen.add(key)
+        normalized_title = title.lower()
+        if "consumer price index" in normalized_title:
+            indicator = "CPI"
+        elif "producer price index" in normalized_title:
+            indicator = "PPI"
+        elif "employment situation" in normalized_title:
+            indicator = "Employment Situation"
+        elif "job openings" in normalized_title:
+            indicator = "JOLTS"
+        else:
+            indicator = title
         agenda.append({
             "title": f"{title} · {month_name} {day}, {item_year}",
             "date": f"{month_name} {day}, {item_year} · {release_time} ET",
             "start_date": start_date.isoformat(),
+            "indicator": indicator,
+            "previous": None,
+            "expected": None,
+            "actual": None,
+            "core_previous": None,
+            "core_expected": None,
+            "core_actual": None,
+            "status": "scheduled",
             "source": "U.S. Bureau of Labor Statistics",
             "link": schedule_url,
         })
@@ -580,7 +676,207 @@ def read_bls_macro_calendar(year=None):
     return agenda
 
 
-def format_weekly_report(state, agenda, macro_agenda=None):
+def read_bls_official_snapshot(indicator):
+    """Obtiene valores oficiales publicados y anteriores desde la API pública BLS.
+
+    No contiene consenso de mercado: expected permanece separado y sin inventar.
+    """
+    series_by_indicator = {
+        "CPI": {
+            "actual": "CUUR0000SA0",
+            "core_actual": "CUUR0000SA0L1E",
+        },
+        "PPI": {
+            "actual": "WPSFD4",
+        },
+        "Employment Situation": {
+            "actual": "CES0000000001",
+            "core_actual": "CES0500000003",
+        },
+    }
+    series_ids = series_by_indicator.get(indicator)
+    if not series_ids:
+        return {}
+    payload = json.dumps({
+        "seriesid": list(series_ids.values()),
+        "startyear": str(datetime.now(timezone.utc).year - 2),
+        "endyear": str(datetime.now(timezone.utc).year),
+    }).encode("utf-8")
+    request = urllib.request.Request(
+        BLS_API_URL,
+        data=payload,
+        headers={"Content-Type": "application/json", "Accept": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(request, timeout=30) as response:
+        result = json.loads(response.read().decode("utf-8"))
+    if result.get("status") != "REQUEST_SUCCEEDED":
+        raise RuntimeError(f"BLS API no confirmó la consulta: {result}")
+    by_id = {series.get("seriesID"): series for series in (result.get("Results", {}).get("series") or [])}
+    snapshot = {}
+    for field, series_id in series_ids.items():
+        observations = [
+            item for item in (by_id.get(series_id, {}).get("data") or [])
+            if item.get("period", "").startswith("M") and item.get("period") != "M13"
+        ]
+        if not observations:
+            continue
+        latest = observations[0]
+        previous = observations[1] if len(observations) > 1 else None
+        snapshot[field] = {
+            "actual": latest.get("value"),
+            "previous": previous.get("value") if previous else None,
+            "year": latest.get("year"),
+            "period": latest.get("period"),
+            "source": "BLS Public Data API",
+            "status": "confirmed",
+        }
+    return snapshot
+
+
+def enrich_bls_macro_calendar(events):
+    """Completa el dato anterior con la última observación oficial disponible."""
+    indicator_snapshots = {}
+    for indicator in ("CPI", "PPI", "Employment Situation"):
+        try:
+            indicator_snapshots[indicator] = read_bls_official_snapshot(indicator)
+        except Exception as error:
+            print(f"Datos BLS no disponibles para {indicator}: {error}")
+    for event in events:
+        title = event.get("title", "").lower()
+        if "consumer price index" in title:
+            indicator = "CPI"
+        elif "producer price index" in title:
+            indicator = "PPI"
+        elif "employment situation" in title:
+            indicator = "Employment Situation"
+        else:
+            continue
+        snapshot = indicator_snapshots.get(indicator, {})
+        actual = snapshot.get("actual", {})
+        core = snapshot.get("core_actual", {})
+        event["previous"] = actual.get("actual")
+        event["core_previous"] = core.get("actual")
+        event["expected"] = None
+        event["core_expected"] = None
+        event["actual"] = None
+        event["core_actual"] = None
+        event["status"] = "scheduled · anterior oficial disponible"
+        event["official_previous_period"] = (
+            f"{actual.get('year')}-{actual.get('period')}"
+            if actual.get("year") and actual.get("period") else None
+        )
+    return events
+
+
+def read_bea_macro_calendar(year=None):
+    """Lee el calendario oficial del BEA sin inventar consenso de mercado."""
+    year = year or datetime.now(timezone.utc).year
+    request = urllib.request.Request(BEA_SCHEDULE_URL, headers=rss_headers())
+    with urllib.request.urlopen(request, timeout=30) as response:
+        html = response.read().decode("utf-8", errors="replace")
+    text = unescape(re.sub(r"<[^>]+>", " ", html))
+    text = re.sub(r"\s+", " ", text)
+    month_names = (
+        "January|February|March|April|May|June|July|August|September|"
+        "October|November|December"
+    )
+    release_pattern = re.compile(
+        rf"({month_names})\s+(\d{{1,2}})\s+(\d{{1,2}}:\d{{2}}\s+[AP]M)\s+(.+?)(?=(?:{month_names})\s+\d{{1,2}}\s+\d{{1,2}}:\d{{2}}\s+[AP]M|To Be Announced|$)",
+        re.IGNORECASE,
+    )
+    relevant_titles = (
+        "GDP",
+        "Personal Income and Outlays",
+        "Personal Income",
+        "Personal Consumption Expenditures",
+        "PCE",
+        "Corporate Profits",
+    )
+    month_numbers = {
+        name: index for index, name in enumerate(
+            ("January", "February", "March", "April", "May", "June",
+             "July", "August", "September", "October", "November", "December"),
+            start=1,
+        )
+    }
+    today = datetime.now(timezone.utc).date()
+    events = []
+    seen = set()
+    for match in release_pattern.finditer(text):
+        month_name, day, release_time, title = match.groups()
+        title = re.sub(r"\s+", " ", title).strip()
+        if not any(keyword.lower() in title.lower() for keyword in relevant_titles):
+            continue
+        start_date = datetime(year, month_numbers[month_name.title()], int(day)).date()
+        if start_date < today:
+            continue
+        key = (start_date.isoformat(), title)
+        if key in seen:
+            continue
+        seen.add(key)
+        indicator = "GDP" if "GDP" in title else "PCE/Ingresos y gastos personales"
+        events.append({
+            "title": f"{title} · {month_name} {day}, {year}",
+            "date": f"{month_name} {day}, {year} · {release_time} ET",
+            "start_date": start_date.isoformat(),
+            "indicator": indicator,
+            "previous": None,
+            "expected": None,
+            "actual": None,
+            "core_previous": None,
+            "core_expected": None,
+            "core_actual": None,
+            "status": "scheduled",
+            "source": "U.S. Bureau of Economic Analysis",
+            "link": BEA_SCHEDULE_URL,
+        })
+    events.sort(key=lambda item: item["start_date"])
+    if not events:
+        raise RuntimeError("El calendario BEA no devolvió eventos futuros de PIB o PCE.")
+    return events
+
+
+def format_official_macro_snapshot():
+    lines = ["📌 Últimos datos macroeconómicos oficiales", ""]
+    for indicator in ("CPI", "PPI", "Employment Situation"):
+        snapshot = read_bls_official_snapshot(indicator)
+        if not snapshot:
+            continue
+        lines.append(f"{indicator}")
+        for field, label in (("actual", "Real"), ("previous", "Anterior"), ("core_actual", "Core")):
+            values = [item for item in snapshot.values() if item.get(field) is not None]
+            if values:
+                item = values[0]
+                lines.append(f"• {label}: {item.get(field)} · {item.get('year')}-{item.get('period')}")
+        lines.append("• Estado: ✅ CONFIRMADO · fuente oficial BLS")
+        lines.append("")
+    if len(lines) == 2:
+        return ""
+    lines.append("🔗 Fuente: BLS Public Data API")
+    return "\n".join(lines)
+
+
+def format_macro_value(value, pending_label="N/D"):
+    if value is None or value == "":
+        return pending_label
+    return str(value)
+
+
+def format_macro_event(event):
+    return (
+        f"• {event['title']}\n"
+        f"  Anterior: {format_macro_value(event.get('previous'))} · "
+        f"Esperado: {format_macro_value(event.get('expected'))} · "
+        f"Real: {format_macro_value(event.get('actual'), 'pendiente')}\n"
+        f"  Core anterior: {format_macro_value(event.get('core_previous'))} · "
+        f"Core esperado: {format_macro_value(event.get('core_expected'))} · "
+        f"Core real: {format_macro_value(event.get('core_actual'), 'pendiente')}\n"
+        f"  Estado: {event.get('status', 'scheduled')} · {event.get('source', 'fuente no disponible')}"
+    )
+
+
+def format_weekly_report(state, agenda, macro_agenda=None, bea_agenda=None):
     now = datetime.now(timezone.utc)
     cutoff = now - timedelta(days=7)
     recent = []
@@ -607,14 +903,22 @@ def format_weekly_report(state, agenda, macro_agenda=None):
     lines.append("📈 Agenda macroeconómica próxima · BLS")
     if macro_agenda:
         for event in macro_agenda[:10]:
-            lines.append(f"• {event['title']} · {event['date'].split(' · ')[-1]}")
+            lines.append(format_macro_event(event))
     else:
         lines.append("• No se pudo consultar el calendario BLS en esta ejecución.")
+    lines.append("")
+    lines.append("🏛️ Agenda macroeconómica próxima · BEA")
+    if bea_agenda:
+        for event in bea_agenda[:8]:
+            lines.append(format_macro_event(event))
+    else:
+        lines.append("• No se pudo consultar el calendario BEA en esta ejecución.")
     lines.append("")
     lines.append("⚖️ Alcance")
     lines.append("Resumen informativo basado en publicaciones registradas y calendario oficial.")
     lines.append(f"🔗 Fuente del calendario: {FOMC_CALENDAR_URL}")
     lines.append(f"🔗 Fuente macroeconómica: {BLS_SCHEDULE_URL.format(year=now.year)}")
+    lines.append(f"🔗 Fuente BEA: {BEA_SCHEDULE_URL}")
     return "\n".join(lines)
 
 
@@ -918,7 +1222,8 @@ def main():
     market_snapshot = ""
     try:
         market_data = read_coinmarketcap_market()
-        market_snapshot = format_coinmarketcap_snapshot(market_data)
+        four_hour_changes = read_binance_four_hour_changes()
+        market_snapshot = format_coinmarketcap_snapshot(market_data, four_hour_changes)
         print(market_snapshot)
     except urllib.error.HTTPError as error:
         body = error.read().decode("utf-8", errors="replace")
@@ -962,10 +1267,23 @@ def main():
             macro_agenda = []
             try:
                 macro_agenda = read_bls_macro_calendar()
+                macro_agenda = enrich_bls_macro_calendar(macro_agenda)
                 print(f"Calendario BLS: {len(macro_agenda)} eventos futuros recibidos.")
             except Exception as error:
                 print(f"Calendario BLS no disponible: {error}")
-            weekly_report = format_weekly_report(state, agenda, macro_agenda)
+            bea_agenda = []
+            try:
+                bea_agenda = read_bea_macro_calendar()
+                print(f"Calendario BEA: {len(bea_agenda)} eventos futuros recibidos.")
+            except Exception as error:
+                print(f"Calendario BEA no disponible: {error}")
+            weekly_report = format_weekly_report(state, agenda, macro_agenda, bea_agenda)
+            try:
+                official_snapshot = format_official_macro_snapshot()
+                if official_snapshot:
+                    weekly_report = weekly_report + "\\n\\n" + official_snapshot
+            except Exception as error:
+                print(f"Datos macro oficiales no disponibles: {error}")
             delivery = send_message(weekly_report)
             print(
                 "Informe semanal enviado a Telegram. "
