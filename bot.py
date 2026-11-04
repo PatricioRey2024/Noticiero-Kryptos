@@ -374,11 +374,11 @@ def format_coinmarketcap_snapshot(market_data, four_hour_changes=None):
         four_hour = four_hour_changes.get(symbol)
         lines.append(f"{symbol}: $" + price_text)
         lines.append(
-            f"1 h: {format_market_change(usd.get('percent_change_1h'))} · "
-            f"4 h: {format_market_change(four_hour)} · "
-            f"24 h: {format_market_change(usd.get('percent_change_24h'))} · "
-            f"7 d: {format_market_change(usd.get('percent_change_7d'))} · "
-            f"30 d: {format_market_change(usd.get('percent_change_30d'))}"
+            f"1 h: {format_directional_change(usd.get('percent_change_1h'))} · "
+            f"4 h: {format_directional_change(four_hour)} · "
+            f"24 h: {format_directional_change(usd.get('percent_change_24h'))} · "
+            f"7 d: {format_directional_change(usd.get('percent_change_7d'))} · "
+            f"30 d: {format_directional_change(usd.get('percent_change_30d'))}"
         )
         lines.append("")
     return "\n".join(lines)
@@ -470,6 +470,18 @@ def format_market_change(value):
     if value is None:
         return "N/D"
     return f"{float(value):+,.2f}%".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def format_directional_change(value):
+    if value is None:
+        return "N/D"
+    if value > 0.05:
+        marker = "🟩"
+    elif value < -0.05:
+        marker = "🟥"
+    else:
+        marker = "🟦"
+    return f"{marker} {format_market_change(value)}"
 
 
 def market_direction(change_percent):
