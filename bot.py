@@ -723,9 +723,24 @@ def read_bls_official_snapshot(indicator):
             continue
         latest = observations[0]
         previous = observations[1] if len(observations) > 1 else None
+        actual_value = latest.get("value")
+        previous_value = previous.get("value") if previous else None
+        monthly_change = None
+        yearly_change = None
+        try:
+            if previous_value not in (None, "", "0"):
+                monthly_change = ((float(actual_value) - float(previous_value)) / float(previous_value)) * 100
+            if len(observations) > 12:
+                year_ago = observations[12].get("value")
+                if year_ago not in (None, "", "0"):
+                    yearly_change = ((float(actual_value) - float(year_ago)) / float(year_ago)) * 100
+        except (TypeError, ValueError, ZeroDivisionError):
+            pass
         snapshot[field] = {
-            "actual": latest.get("value"),
-            "previous": previous.get("value") if previous else None,
+            "actual": actual_value,
+            "previous": previous_value,
+            "monthly_change": monthly_change,
+            "yearly_change": yearly_change,
             "year": latest.get("year"),
             "period": latest.get("period"),
             "source": "BLS Public Data API",
@@ -756,7 +771,11 @@ def enrich_bls_macro_calendar(events):
         actual = snapshot.get("actual", {})
         core = snapshot.get("core_actual", {})
         event["previous"] = actual.get("actual")
+        event["previous_monthly_change"] = actual.get("monthly_change")
+        event["previous_yearly_change"] = actual.get("yearly_change")
         event["core_previous"] = core.get("actual")
+        event["core_monthly_change"] = core.get("monthly_change")
+        event["core_yearly_change"] = core.get("yearly_change")
         event["expected"] = None
         event["core_expected"] = None
         event["actual"] = None
@@ -878,6 +897,21 @@ def translate_macro_date(value):
     return translated
 
 
+def translate_macro_date(value):
+    if not value:
+        return value
+    months = {
+        "January": "enero", "February": "febrero", "March": "marzo",
+        "April": "abril", "May": "mayo", "June": "junio",
+        "July": "julio", "August": "agosto", "September": "septiembre",
+        "October": "octubre", "November": "noviembre", "December": "diciembre",
+    }
+    translated = value
+    for english, spanish in months.items():
+        translated = translated.replace(english, spanish)
+    return translated
+
+
 def translate_macro_title(title):
     translations = (
         ("Productivity and Costs", "Productividad y costos (Productivity and Costs)"),
@@ -886,6 +920,12 @@ def translate_macro_title(title):
         ("Producer Price Index", "Índice de precios al productor (PPI)"),
         ("Job Openings and Labor Turnover Survey", "Ofertas de empleo y rotación laboral (JOLTS)"),
         ("Import and Export Price Indexes", "Índices de precios de importación y exportación"),
+        ("for Third Quarter", "del tercer trimestre"),
+        ("for October", "de octubre"),
+        ("for November", "de noviembre"),
+        ("and Corporate Profits", "y beneficios corporativos"),
+        ("New GDP", "Nuevo PIB"),
+        ("Personal Income and Outlays", "Ingresos y gastos personales"),
     )
     translated = title
     for english, spanish in translations:
@@ -895,27 +935,27 @@ def translate_macro_title(title):
 
 def format_macro_metric(event, value, field):
     if value in (None, ""):
-        return format_macro_value(value, "N/D" if field != "actual" else "pendiente")
+        return "pendiente" if field == "actual" else "N/D"
     title = event.get("title", "")
     if "Employment Situation" in title and field in {"previous", "actual"}:
         return f"{format_macro_value(value)} miles de empleos"
     if "Employment Situation" in title and field.startswith("core"):
         return f"USD {format_macro_value(value)} por hora"
-    if "Consumer Price Index" in title:
-        return f"índice {format_macro_value(value)}"
-    if "Producer Price Index" in title:
+    if "Consumer Price Index" in title or "Producer Price Index" in title:
         return f"índice {format_macro_value(value)}"
     return format_macro_value(value)
 
 
+def format_percent(value):
+    if value is None:
+        return "N/D"
+    return f"{float(value):+.2f}%".replace(".", ",")
+
 def format_macro_event(event):
     source = event.get("source", "fuente no disponible")
     is_bea = "Economic Analysis" in source
-    section = "🏛️ BEA · ACTIVIDAD ECONÓMICA" if is_bea else "📈 BLS · INDICADORES MACRO"
     title = translate_macro_title(event.get("title", "Evento macroeconómico"))
-    lines = [
-        f"🗓️ {title}",
-    ]
+    lines = [f"🗓️ {title}"]
     if event.get("date"):
         lines.append(f"📅 {translate_macro_date(event['date'])}")
     lines.extend([
@@ -924,9 +964,17 @@ def format_macro_event(event):
         f"Esperado: {format_macro_metric(event, event.get('expected'), 'expected')}",
         f"Real: {format_macro_metric(event, event.get('actual'), 'actual')}",
     ])
-    has_core = any(
-        event.get(field) not in (None, "")
-        for field in ("core_previous", "core_expected", "core_actual")
+    if "Consumer Price Index" in event.get("title", "") or "Producer Price Index" in event.get("title", ""):
+        lines.extend([
+            f"Variación mensual anterior: {format_percent(event.get('previous_monthly_change'))}",
+            f"Variación interanual anterior: {format_percent(event.get('previous_yearly_change'))}",
+        ])
+    has_core = (
+        not is_bea
+        and any(
+            indicator in event.get("title", "")
+            for indicator in ("Consumer Price Index", "Producer Price Index", "Employment Situation")
+        )
     )
     if has_core:
         lines.extend([
