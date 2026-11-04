@@ -863,22 +863,51 @@ def format_macro_value(value, pending_label="N/D"):
     return str(value)
 
 
+def translate_macro_title(title):
+    translations = (
+        ("Productivity and Costs", "Productividad y costos (Productivity and Costs)"),
+        ("Employment Situation", "Situación del empleo (Employment Situation)"),
+        ("Consumer Price Index", "Índice de precios al consumidor (CPI)"),
+        ("Producer Price Index", "Índice de precios al productor (PPI)"),
+        ("Job Openings and Labor Turnover Survey", "Ofertas de empleo y rotación laboral (JOLTS)"),
+        ("Import and Export Price Indexes", "Índices de precios de importación y exportación"),
+    )
+    translated = title
+    for english, spanish in translations:
+        translated = translated.replace(english, spanish)
+    return translated
+
+
+def format_macro_metric(event, value, field):
+    if value in (None, ""):
+        return format_macro_value(value, "N/D" if field != "actual" else "pendiente")
+    title = event.get("title", "")
+    if "Employment Situation" in title and field in {"previous", "actual"}:
+        return f"{format_macro_value(value)} miles de empleos"
+    if "Employment Situation" in title and field.startswith("core"):
+        return f"USD {format_macro_value(value)} por hora"
+    if "Consumer Price Index" in title:
+        return f"índice {format_macro_value(value)}"
+    if "Producer Price Index" in title:
+        return f"índice {format_macro_value(value)}"
+    return format_macro_value(value)
+
+
 def format_macro_event(event):
     source = event.get("source", "fuente no disponible")
     is_bea = "Economic Analysis" in source
     section = "🏛️ BEA · ACTIVIDAD ECONÓMICA" if is_bea else "📈 BLS · INDICADORES MACRO"
+    title = translate_macro_title(event.get("title", "Evento macroeconómico"))
     lines = [
-        section,
-        "",
-        f"🗓️ {event.get('title', 'Evento macroeconómico')}",
+        f"🗓️ {title}",
     ]
     if event.get("date"):
         lines.append(f"📅 {event['date']}")
     lines.extend([
         "",
-        f"Anterior: {format_macro_value(event.get('previous'))}",
-        f"Esperado: {format_macro_value(event.get('expected'))}",
-        f"Real: {format_macro_value(event.get('actual'), 'pendiente')}",
+        f"Anterior: {format_macro_metric(event, event.get('previous'), 'previous')}",
+        f"Esperado: {format_macro_metric(event, event.get('expected'), 'expected')}",
+        f"Real: {format_macro_metric(event, event.get('actual'), 'actual')}",
     ])
     has_core = any(
         event.get(field) not in (None, "")
@@ -888,13 +917,13 @@ def format_macro_event(event):
         lines.extend([
             "",
             "Core",
-            f"Anterior: {format_macro_value(event.get('core_previous'))}",
-            f"Esperado: {format_macro_value(event.get('core_expected'))}",
-            f"Real: {format_macro_value(event.get('core_actual'), 'pendiente')}",
+            f"Anterior: {format_macro_metric(event, event.get('core_previous'), 'core_previous')}",
+            f"Esperado: {format_macro_metric(event, event.get('core_expected'), 'core_expected')}",
+            f"Real: {format_macro_metric(event, event.get('core_actual'), 'core_actual')}",
         ])
     lines.extend([
         "",
-        f"Estado: 🟡 PROGRAMADO · {event.get('status', 'scheduled')}",
+        "Estado: 🟡 PROGRAMADO",
         f"Fuente: {source}",
     ])
     return "\n".join(lines)
