@@ -1128,46 +1128,70 @@ def has_cross_source_confirmation(news, news_items):
     return False
 
 
+def split_telegram_message(text, max_length=3900):
+    """Divide mensajes largos sin cortar líneas y deja margen al límite de Telegram."""
+    if len(text) <= max_length:
+        return [text]
+    chunks = []
+    current = []
+    current_length = 0
+    for line in text.splitlines():
+        addition = len(line) + (1 if current else 0)
+        if current and current_length + addition > max_length:
+            chunks.append("\n".join(current))
+            current = []
+            current_length = 0
+        current.append(line)
+        current_length += len(line) + (1 if current_length else 0)
+    if current:
+        chunks.append("\n".join(current))
+    return chunks
+
+
 def send_message(text):
     token = os.environ["TELEGRAM_BOT_TOKEN"]
-    payload = {
-        "chat_id": os.environ["TELEGRAM_CHAT_ID"],
-        "message_thread_id": int(os.environ["TELEGRAM_TOPIC_ID"]),
-        "text": text,
-        "disable_web_page_preview": False,
-    }
-    request = urllib.request.Request(
-        f"https://api.telegram.org/bot{token}/sendMessage",
-        data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json"}, method="POST",
-    )
-    for attempt in range(1, TELEGRAM_MAX_ATTEMPTS + 1):
-        try:
-            with urllib.request.urlopen(request, timeout=30) as response:
-                result = json.loads(response.read().decode("utf-8"))
-            if not result.get("ok"):
-                raise RuntimeError(result)
-            message = result.get("result") or {}
-            return {
-                "message_id": message.get("message_id"),
-                "chat_id": message.get("chat", {}).get("id"),
-                "date": message.get("date"),
-            }
-        except urllib.error.HTTPError as error:
-            if error.code not in TELEGRAM_RETRYABLE_STATUS_CODES or attempt == TELEGRAM_MAX_ATTEMPTS:
-                raise
-            retry_after = error.headers.get("Retry-After")
+    deliveries = []
+    for chunk in split_telegram_message(text):
+        payload = {
+            "chat_id": os.environ["TELEGRAM_CHAT_ID"],
+            "message_thread_id": int(os.environ["TELEGRAM_TOPIC_ID"]),
+            "text": chunk,
+            "disable_web_page_preview": False,
+        }
+        request = urllib.request.Request(
+            f"https://api.telegram.org/bot{token}/sendMessage",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"}, method="POST",
+        )
+        for attempt in range(1, TELEGRAM_MAX_ATTEMPTS + 1):
             try:
-                wait_seconds = max(1, min(int(retry_after), 60))
-            except (TypeError, ValueError):
-                wait_seconds = 2 ** (attempt - 1)
-            print(
-                f"Telegram no disponible temporalmente (HTTP {error.code}). "
-                f"Reintento en {wait_seconds} segundos."
-            )
-            time.sleep(wait_seconds)
-
-    raise RuntimeError("Telegram no confirmó la entrega del mensaje.")
+                with urllib.request.urlopen(request, timeout=30) as response:
+                    result = json.loads(response.read().decode("utf-8"))
+                if not result.get("ok"):
+                    raise RuntimeError(result)
+                message = result.get("result") or {}
+                deliveries.append({
+                    "message_id": message.get("message_id"),
+                    "chat_id": message.get("chat", {}).get("id"),
+                    "date": message.get("date"),
+                })
+                break
+            except urllib.error.HTTPError as error:
+                if error.code not in TELEGRAM_RETRYABLE_STATUS_CODES or attempt == TELEGRAM_MAX_ATTEMPTS:
+                    raise
+                retry_after = error.headers.get("Retry-After")
+                try:
+                    wait_seconds = max(1, min(int(retry_after), 60))
+                except (TypeError, ValueError):
+                    wait_seconds = 2 ** (attempt - 1)
+                print(
+                    f"Telegram no disponible temporalmente (HTTP {error.code}). "
+                    f"Reintento en {wait_seconds} segundos."
+                )
+                time.sleep(wait_seconds)
+    if not deliveries:
+        raise RuntimeError("Telegram no confirmó la entrega del mensaje.")
+    return deliveries[-1]
 
 
 def build_message(news, analysis, cross_source_confirmed=False):
