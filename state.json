@@ -21,7 +21,8 @@
     "tech:Microsoft AI:https://www.microsoft.com/en-us/microsoft-cloud/blog/general/2026/10/29/accelerating-frontier-transformation-reshape-business-processes/",
     "coinbase:sgsgw21dz2jb:28n4jd75yxs0",
     "tech:OpenAI News:https://openai.com/index/heimstaden",
-    "tech:Google AI:https://blog.google/innovation-and-ai/technology/ai/google-ai-updates-october-2026/"
+    "tech:Google AI:https://blog.google/innovation-and-ai/technology/ai/google-ai-updates-october-2026/",
+    "binance:https://www.binance.com/en/support/announcement/c6ba9aa726974fc6b9332a2c8f63b405|security incident recovery update 7 98 of stolen assets replenished and new por snapshot with expanded coverage 2026 11 04"
   ],
   "published_messages": {
     "binance:https://www.binance.com/en/support/announcement/2d83c325ab6e49c6bd6c5de8803b11a6|security incident recovery update 6 withdrawals reopen for more assets 2026 11 03": {
@@ -41,6 +42,15 @@
       "telegram_chat_id": -1003754072182,
       "telegram_date": 1793721138,
       "recorded_at": "2026-11-03T15:52:19.082192+00:00"
+    },
+    "binance:https://www.binance.com/en/support/announcement/c6ba9aa726974fc6b9332a2c8f63b405|security incident recovery update 7 98 of stolen assets replenished and new por snapshot with expanded coverage 2026 11 04": {
+      "source": "Binance",
+      "title": "Security Incident | Recovery Update #7: 98% of Stolen Assets Replenished and New PoR Snapshot With Expanded Coverage (2026-11-04)",
+      "relevance": "ALTA",
+      "telegram_message_id": 698,
+      "telegram_chat_id": -1003754072182,
+      "telegram_date": 1793809313,
+      "recorded_at": "2026-11-04T16:21:53.731943+00:00"
     }
   },
   "alert_checked_ids": [
@@ -48,6 +58,9 @@
     "binance:https://www.binance.com/en/support/announcement/2d83c325ab6e49c6bd6c5de8803b11a6|security incident recovery update 6 withdrawals reopen for more assets 2026 11 03",
     "tech:OpenAI News:https://openai.com/index/heimstaden",
     "tech:Google AI:https://blog.google/innovation-and-ai/technology/ai/google-ai-updates-october-2026/",
-    "tech:OpenAI News:https://openai.com/index/accelerating-engineering-for-the-physical-world"
+    "tech:OpenAI News:https://openai.com/index/accelerating-engineering-for-the-physical-world",
+    "coinbase:dcx1v2c47h3g:yj46y8mczy6f",
+    "binance:https://www.binance.com/en/support/announcement/c6ba9aa726974fc6b9332a2c8f63b405|security incident recovery update 7 98 of stolen assets replenished and new por snapshot with expanded coverage 2026 11 04",
+    "tech:OpenAI News:https://openai.com/index/openai-to-acquire-pierre"
   ]
 }
