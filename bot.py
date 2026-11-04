@@ -863,6 +863,21 @@ def format_macro_value(value, pending_label="N/D"):
     return str(value)
 
 
+def translate_macro_date(value):
+    if not value:
+        return value
+    months = {
+        "January": "enero", "February": "febrero", "March": "marzo",
+        "April": "abril", "May": "mayo", "June": "junio",
+        "July": "julio", "August": "agosto", "September": "septiembre",
+        "October": "octubre", "November": "noviembre", "December": "diciembre",
+    }
+    translated = value
+    for english, spanish in months.items():
+        translated = translated.replace(english, spanish)
+    return translated
+
+
 def translate_macro_title(title):
     translations = (
         ("Productivity and Costs", "Productividad y costos (Productivity and Costs)"),
@@ -902,7 +917,7 @@ def format_macro_event(event):
         f"🗓️ {title}",
     ]
     if event.get("date"):
-        lines.append(f"📅 {event['date']}")
+        lines.append(f"📅 {translate_macro_date(event['date'])}")
     lines.extend([
         "",
         f"Anterior: {format_macro_metric(event, event.get('previous'), 'previous')}",
@@ -924,7 +939,7 @@ def format_macro_event(event):
     lines.extend([
         "",
         "Estado: 🟡 PROGRAMADO",
-        f"Fuente: {source}",
+        f"Fuente: {'Oficina de Estadísticas Laborales de EE. UU. (BLS)' if not is_bea else 'Oficina de Análisis Económico de EE. UU. (BEA)'}",
     ])
     return "\n".join(lines)
 
