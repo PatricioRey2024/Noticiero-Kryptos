@@ -22,7 +22,9 @@
     "coinbase:sgsgw21dz2jb:28n4jd75yxs0",
     "tech:OpenAI News:https://openai.com/index/heimstaden",
     "tech:Google AI:https://blog.google/innovation-and-ai/technology/ai/google-ai-updates-october-2026/",
-    "binance:https://www.binance.com/en/support/announcement/c6ba9aa726974fc6b9332a2c8f63b405|security incident recovery update 7 98 of stolen assets replenished and new por snapshot with expanded coverage 2026 11 04"
+    "binance:https://www.binance.com/en/support/announcement/c6ba9aa726974fc6b9332a2c8f63b405|security incident recovery update 7 98 of stolen assets replenished and new por snapshot with expanded coverage 2026 11 04",
+    "coinbase:dcx1v2c47h3g:yj46y8mczy6f",
+    "tech:OpenAI News:https://openai.com/index/openai-to-acquire-pierre"
   ],
   "published_messages": {
     "binance:https://www.binance.com/en/support/announcement/2d83c325ab6e49c6bd6c5de8803b11a6|security incident recovery update 6 withdrawals reopen for more assets 2026 11 03": {
@@ -51,6 +53,15 @@
       "telegram_chat_id": -1003754072182,
       "telegram_date": 1793809313,
       "recorded_at": "2026-11-04T16:21:53.731943+00:00"
+    },
+    "tech:OpenAI News:https://openai.com/index/openai-to-acquire-pierre": {
+      "source": "OpenAI News",
+      "title": "OpenAI to acquire Pierre Computer Company, Inc.",
+      "relevance": "MEDIA",
+      "telegram_message_id": 705,
+      "telegram_chat_id": -1003754072182,
+      "telegram_date": 1793815983,
+      "recorded_at": "2026-11-04T18:13:03.270690+00:00"
     }
   },
   "alert_checked_ids": [
