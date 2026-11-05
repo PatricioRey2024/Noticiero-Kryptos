@@ -24,7 +24,12 @@
     "tech:Google AI:https://blog.google/innovation-and-ai/technology/ai/google-ai-updates-october-2026/",
     "binance:https://www.binance.com/en/support/announcement/c6ba9aa726974fc6b9332a2c8f63b405|security incident recovery update 7 98 of stolen assets replenished and new por snapshot with expanded coverage 2026 11 04",
     "coinbase:dcx1v2c47h3g:yj46y8mczy6f",
-    "tech:OpenAI News:https://openai.com/index/openai-to-acquire-pierre"
+    "tech:OpenAI News:https://openai.com/index/openai-to-acquire-pierre",
+    "federal_reserve:https://www.federalreserve.gov/newsevents/pressreleases/enforcement20261105a.htm",
+    "coinbase:5pgqt8s63hkf:474r313xz7zk",
+    "binance:https://www.binance.com/en/support/announcement/a225a3b6084c41dc8c8dfb33f4de5872|security incident recovery update 8 withdrawals for more assets to reopen 2026 11 05",
+    "tech:OpenAI News:https://openai.com/index/setting-new-standard-responsible-ai-infrastructure",
+    "tech:Google AI:https://blog.google/innovation-and-ai/technology/developers-tools/introducing-gemini-omni-1-2-flash/"
   ],
   "published_messages": {
     "binance:https://www.binance.com/en/support/announcement/2d83c325ab6e49c6bd6c5de8803b11a6|security incident recovery update 6 withdrawals reopen for more assets 2026 11 03": {
@@ -62,6 +67,33 @@
       "telegram_chat_id": -1003754072182,
       "telegram_date": 1793815983,
       "recorded_at": "2026-11-04T18:13:03.270690+00:00"
+    },
+    "coinbase:5pgqt8s63hkf:474r313xz7zk": {
+      "source": "Coinbase Status",
+      "title": "Disabled Sends / Receives - EVMSEI",
+      "relevance": "MEDIA",
+      "telegram_message_id": 733,
+      "telegram_chat_id": -1003754072182,
+      "telegram_date": 1793902422,
+      "recorded_at": "2026-11-05T18:13:42.857915+00:00"
+    },
+    "binance:https://www.binance.com/en/support/announcement/a225a3b6084c41dc8c8dfb33f4de5872|security incident recovery update 8 withdrawals for more assets to reopen 2026 11 05": {
+      "source": "Binance",
+      "title": "Security Incident | Recovery Update #8: Withdrawals for More Assets to Reopen (2026-11-05)",
+      "relevance": "ALTA",
+      "telegram_message_id": 734,
+      "telegram_chat_id": -1003754072182,
+      "telegram_date": 1793902424,
+      "recorded_at": "2026-11-05T18:13:44.848443+00:00"
+    },
+    "tech:OpenAI News:https://openai.com/index/setting-new-standard-responsible-ai-infrastructure": {
+      "source": "OpenAI News",
+      "title": "Setting a new standard for responsible AI infrastructure",
+      "relevance": "MEDIA",
+      "telegram_message_id": 735,
+      "telegram_chat_id": -1003754072182,
+      "telegram_date": 1793902426,
+      "recorded_at": "2026-11-05T18:13:46.283744+00:00"
     }
   },
   "alert_checked_ids": [
