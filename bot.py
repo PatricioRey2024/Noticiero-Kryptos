@@ -550,11 +550,16 @@ def read_yahoo_market_data():
         change_percent = None
         if previous_close not in (None, 0):
             change_percent = ((close - previous_close) / previous_close) * 100
+        first_close = valid[0][1] if valid else None
+        week_change_percent = None
+        if first_close not in (None, 0):
+            week_change_percent = ((close - first_close) / first_close) * 100
         market[label] = {
             "timestamp": timestamp,
             "close": close,
             "previous_close": previous_close,
             "change_percent": change_percent,
+            "week_change_percent": week_change_percent,
             "source": "Yahoo Finance chart",
             "symbol": symbol,
         }
@@ -784,8 +789,9 @@ def format_extended_market_context(
         change = item.get("change_percent")
         direction = market_direction(change)
         lines.append(
-            f"{direction} {label}: {format_market_number(item.get('close'))} "
-            f"({format_market_change(change)}) · "
+            f"{direction} {label}: {format_market_number(item.get('close'))} · "
+            f"24 h: {format_market_change(change)} · "
+            f"5 d: {format_market_change(item.get('week_change_percent'))} · "
             f"{updated.strftime('%Y-%m-%d %H:%M UTC')}"
         )
         lines.append("")
