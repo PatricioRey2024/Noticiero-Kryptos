@@ -394,9 +394,9 @@ def format_coinmarketcap_snapshot(market_data, four_hour_changes=None):
     if isinstance(quotes, list):
         assets = [(asset.get("id", ""), asset) for asset in quotes]
     else:
-        assets = quotes.items()
+        assets = list(quotes.items())
 
-    for asset_id, asset in assets:
+    for index, (asset_id, asset) in enumerate(assets):
         quote = asset.get("quote", {}) if isinstance(asset, dict) else {}
         if isinstance(quote, list):
             quote = quote[0] if quote else {}
@@ -421,6 +421,9 @@ def format_coinmarketcap_snapshot(market_data, four_hour_changes=None):
             f"30 d: {format_directional_change(usd.get('percent_change_30d'))}"
         )
         lines.append("")
+        if index < len(assets) - 1:
+            lines.append("────────────────────")
+            lines.append("")
     return "\n".join(lines)
 
 
@@ -671,6 +674,7 @@ def format_crypto_comparison(market_data=None):
             f"{marker} {label}: 24h {format_market_change(change_24h)} · "
             f"7d {format_market_change(change_7d)}"
         )
+        lines.append("────────────────────")
     best = rows[0]
     worst = rows[-1]
     lines.extend([
@@ -700,6 +704,7 @@ def format_traditional_comparison(traditional_market):
             if weekly is not None else ""
         )
         lines.append(f"{marker} {label}: 24h {format_market_change(daily)}{weekly_text}")
+        lines.append("────────────────────")
     lines.extend([
         "",
         "La comparación ordena el desempeño observado y no constituye pronóstico.",
@@ -763,6 +768,9 @@ def format_extended_market_context(
             f"({format_market_change(change)}) · "
             f"{updated.strftime('%Y-%m-%d %H:%M UTC')}"
         )
+        lines.append("")
+        lines.append("────────────────────")
+        lines.append("")
     lines.append("Flecha: variación frente al dato anterior · Yahoo Finance chart")
     lines.append("")
     lines.append(format_traditional_comparison(traditional_market))
