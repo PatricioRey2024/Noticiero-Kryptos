@@ -49,7 +49,7 @@ class BotStateTests(unittest.TestCase):
                 "date": "November 25, 2026 · 08:30 AM ET",
             }],
         )
-        self.assertIn("Agenda macroeconómica próxima · BEA", report)
+        self.assertIn("🏛️ BEA · AGENDA MACROECONÓMICA", report)
         self.assertIn("GDP (Advance Estimate)", report)
 
     def test_unknown_bls_indicator_does_not_publish_unverified_values(self):
