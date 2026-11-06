@@ -591,9 +591,9 @@ def format_change_with_direction(value):
     if value is None:
         return "N/D"
     if value > 0.05:
-        marker = "📈"
+        marker = "⬆️"
     elif value < -0.05:
-        marker = "📉"
+        marker = "⬇️"
     else:
         marker = "➡️"
     return f"{format_market_change(value)} {marker}"
@@ -603,9 +603,9 @@ def format_directional_change(value):
     if value is None:
         return "N/D"
     if value > 0.05:
-        marker = "📈"
+        marker = "⬆️"
     elif value < -0.05:
-        marker = "📉"
+        marker = "⬇️"
     else:
         marker = "➡️"
     return f"{marker} {format_market_change(value)}"
@@ -613,12 +613,12 @@ def format_directional_change(value):
 
 def market_direction(change_percent):
     if change_percent is None:
-        return "🟦►"
+        return "➡️"
     if change_percent > 0.05:
-        return "🟩▲"
+        return "⬆️"
     if change_percent < -0.05:
-        return "🟥▼"
-    return "🟦►"
+        return "⬇️"
+    return "➡️"
 
 
 def format_asset_comparison(market_data=None, traditional_market=None, temporalidad="24 h"):
