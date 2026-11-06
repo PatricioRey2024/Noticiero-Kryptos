@@ -29,7 +29,8 @@
     "coinbase:5pgqt8s63hkf:474r313xz7zk",
     "binance:https://www.binance.com/en/support/announcement/a225a3b6084c41dc8c8dfb33f4de5872|security incident recovery update 8 withdrawals for more assets to reopen 2026 11 05",
     "tech:OpenAI News:https://openai.com/index/setting-new-standard-responsible-ai-infrastructure",
-    "tech:Google AI:https://blog.google/innovation-and-ai/technology/developers-tools/introducing-gemini-omni-1-2-flash/"
+    "tech:Google AI:https://blog.google/innovation-and-ai/technology/developers-tools/introducing-gemini-omni-1-2-flash/",
+    "binance:https://www.binance.com/en/support/announcement/a2dd10b860a14c35a856fe9d66d6032c|recovery update 9 withdrawals for more assets to reopen 2026 11 06"
   ],
   "published_messages": {
     "binance:https://www.binance.com/en/support/announcement/2d83c325ab6e49c6bd6c5de8803b11a6|security incident recovery update 6 withdrawals reopen for more assets 2026 11 03": {
@@ -94,6 +95,15 @@
       "telegram_chat_id": -1003754072182,
       "telegram_date": 1793902426,
       "recorded_at": "2026-11-05T18:13:46.283744+00:00"
+    },
+    "binance:https://www.binance.com/en/support/announcement/a2dd10b860a14c35a856fe9d66d6032c|recovery update 9 withdrawals for more assets to reopen 2026 11 06": {
+      "source": "Binance",
+      "title": "Recovery Update #9: Withdrawals for More Assets to Reopen (2026-11-06)",
+      "relevance": "ALTA",
+      "telegram_message_id": 738,
+      "telegram_chat_id": -1003754072182,
+      "telegram_date": 1793936118,
+      "recorded_at": "2026-11-06T03:35:18.622345+00:00"
     }
   },
   "alert_checked_ids": [
@@ -104,6 +114,8 @@
     "tech:OpenAI News:https://openai.com/index/accelerating-engineering-for-the-physical-world",
     "coinbase:dcx1v2c47h3g:yj46y8mczy6f",
     "binance:https://www.binance.com/en/support/announcement/c6ba9aa726974fc6b9332a2c8f63b405|security incident recovery update 7 98 of stolen assets replenished and new por snapshot with expanded coverage 2026 11 04",
-    "tech:OpenAI News:https://openai.com/index/openai-to-acquire-pierre"
+    "tech:OpenAI News:https://openai.com/index/openai-to-acquire-pierre",
+    "binance:https://www.binance.com/en/support/announcement/a2dd10b860a14c35a856fe9d66d6032c|recovery update 9 withdrawals for more assets to reopen 2026 11 06",
+    "tech:OpenAI News:https://openai.com/index/australian-universities-ai-native-graduates"
   ]
 }
