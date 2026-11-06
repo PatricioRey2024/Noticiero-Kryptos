@@ -328,7 +328,7 @@ def read_coinmarketcap_market():
     return {"quotes": data}
 
 
-def read_yahoo_intraday_change(symbol):
+def read_yahoo_intraday_change(symbol, periods=4):
     request = urllib.request.Request(
         f"{YAHOO_CHART_URL}{urllib.parse.quote(symbol, safe='')}?range=2d&interval=1h",
         headers={"Accept": "application/json", "User-Agent": user_agent()},
@@ -341,9 +341,11 @@ def read_yahoo_intraday_change(symbol):
     quotes = ((chart[0].get("indicators") or {}).get("quote") or [])
     closes = (quotes[0] if quotes else {}).get("close") or []
     closes = [float(value) for value in closes if value is not None]
-    if len(closes) < 5 or closes[-5] == 0:
+    offset = periods + 1
+    if len(closes) < offset or closes[-offset] == 0:
         return None
-    return ((closes[-1] - closes[-5]) / closes[-5]) * 100
+    return ((closes[-1] - closes[-offset]) / closes[-offset]) * 100
+
 
 
 def read_binance_four_hour_changes():
@@ -421,11 +423,11 @@ def format_coinmarketcap_snapshot(market_data, four_hour_changes=None):
                 f" · referencia 1 h: {format_directional_change(one_hour)}"
             )
         lines.append(
-            f"1 h: {format_directional_change(one_hour)} · "
-            f"4 h: {four_hour_text} · "
-            f"24 h: {format_directional_change(usd.get('percent_change_24h'))} · "
-            f"7 d: {format_directional_change(usd.get('percent_change_7d'))} · "
-            f"30 d: {format_directional_change(usd.get('percent_change_30d'))}"
+            f"1 h: {format_change_with_direction(one_hour)} · "
+            f"4 h: {format_change_with_direction(four_hour)} · "
+            f"24 h: {format_change_with_direction(usd.get('percent_change_24h'))} · "
+            f"7 d: {format_change_with_direction(usd.get('percent_change_7d'))} · "
+            f"30 d: {format_change_with_direction(usd.get('percent_change_30d'))}"
         )
         lines.append("")
         if index < len(assets) - 1:
@@ -555,12 +557,18 @@ def read_yahoo_market_data():
         week_change_percent = None
         if first_close not in (None, 0):
             week_change_percent = ((close - first_close) / first_close) * 100
+        intraday_1h = None
+        try:
+            intraday_1h = read_yahoo_intraday_change(symbol, periods=1)
+        except Exception as error:
+            print(f"Yahoo 1 h no disponible para {label}: {error}")
         market[label] = {
             "timestamp": timestamp,
             "close": close,
             "previous_close": previous_close,
             "change_percent": change_percent,
             "week_change_percent": week_change_percent,
+            "intraday_1h": intraday_1h,
             "source": "Yahoo Finance chart",
             "symbol": symbol,
         }
@@ -577,6 +585,18 @@ def format_market_change(value):
     if value is None:
         return "N/D"
     return f"{float(value):+,.2f}%".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def format_change_with_direction(value):
+    if value is None:
+        return "N/D"
+    if value > 0.05:
+        marker = "📈"
+    elif value < -0.05:
+        marker = "📉"
+    else:
+        marker = "➡️"
+    return f"{format_market_change(value)} {marker}"
 
 
 def format_directional_change(value):
@@ -688,18 +708,17 @@ def format_crypto_comparison(market_data=None, four_hour_changes=None):
         lines.append("No hay datos comparables disponibles.")
         return "\n".join(lines)
     for row in rows:
-        marker = "📈" if row["change_24h"] > 0.05 else "📉" if row["change_24h"] < -0.05 else "➡️"
-        four_hour_text = format_market_change(row["change_4h"])
+        four_hour_text = format_change_with_direction(row["change_4h"])
         if row["change_4h"] is None:
             four_hour_text += (
                 f" · referencia 1 h {format_market_change(row['change_1h'])}"
             )
         lines.append(
-            f"{marker} {row['label']}: "
-            f"1 h {format_market_change(row['change_1h'])} · "
+            f"{row['label']}: "
+            f"1 h {format_change_with_direction(row['change_1h'])} · "
             f"4 h {four_hour_text} · "
-            f"24 h {format_market_change(row['change_24h'])} · "
-            f"7 d {format_market_change(row['change_7d'])}"
+            f"24 h {format_change_with_direction(row['change_24h'])} · "
+            f"7 d {format_change_with_direction(row['change_7d'])}"
         )
         lines.append("────────────────────")
     best = rows[0]
@@ -714,18 +733,20 @@ def format_crypto_comparison(market_data=None, four_hour_changes=None):
 
 def format_traditional_comparison(traditional_market):
     rows = [
-        (label, item.get("change_percent"))
+        (label, item.get("intraday_1h"), item.get("change_percent"))
         for label, item in (traditional_market or {}).items()
         if item.get("change_percent") is not None
     ]
-    rows.sort(key=lambda row: float(row[1]), reverse=True)
-    lines = ["<b>📊 Comparación de mercados tradicionales · temporalidad 24 h</b>", ""]
+    rows.sort(key=lambda row: float(row[2]), reverse=True)
+    lines = ["<b>📊 Comparación de mercados tradicionales · temporalidad 1 h · 24 h</b>", ""]
     if not rows:
         lines.append("No hay datos comparables disponibles.")
         return "\n".join(lines)
-    for label, daily in rows:
-        marker = "📈" if daily > 0.05 else "📉" if daily < -0.05 else "➡️"
-        lines.append(f"{marker} {label}: 24 h {format_market_change(daily)}")
+    for label, hourly, daily in rows:
+        lines.append(
+            f"{label}: 1 h {format_change_with_direction(hourly)} · "
+            f"24 h {format_change_with_direction(daily)}"
+        )
         lines.append("────────────────────")
     lines.extend([
         "",
@@ -738,7 +759,9 @@ def format_crypto_intermarket_context(pearson_value, traditional_market):
     for label in ("DXY", "NQ100", "S&P 500", "VIX", "XAU", "OIL", "EUR/USD", "USD/JPY"):
         item = (traditional_market or {}).get(label)
         if item and item.get("change_percent") is not None:
-            lines.append(f"{label}: {format_market_change(item['change_percent'])} · 24 h")
+            lines.append(
+                f"{label}: 24 h {format_change_with_direction(item['change_percent'])}"
+            )
     lines.append("")
     lines.append(format_correlation(pearson_value, "30 días"))
     lines.append(
@@ -783,10 +806,10 @@ def format_extended_market_context(
     for label, item in traditional_market.items():
         updated = datetime.fromtimestamp(item["timestamp"], tz=timezone.utc)
         change = item.get("change_percent")
-        direction = market_direction(change)
         lines.append(
-            f"{direction} {label}: {format_market_number(item.get('close'))} · "
-            f"24 h: {format_market_change(change)} · "
+            f"{label}: {format_market_number(item.get('close'))} · "
+            f"1 h: {format_change_with_direction(item.get('intraday_1h'))} · "
+            f"24 h: {format_change_with_direction(change)} · "
             f"{updated.strftime('%Y-%m-%d %H:%M UTC')}"
         )
         lines.append("")
