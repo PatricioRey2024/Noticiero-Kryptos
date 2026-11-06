@@ -627,7 +627,7 @@ def format_asset_comparison(market_data=None, traditional_market=None, temporali
             "label": label,
             "change": item.get("change_percent"),
             "secondary": item.get("week_change_percent"),
-            "secondary_label": "5d",
+            "secondary_label": "5 d",
         })
     rows = [row for row in rows if row.get("change") is not None]
     rows.sort(key=lambda row: float(row["change"]), reverse=True)
@@ -718,14 +718,14 @@ def format_traditional_comparison(traditional_market):
         if item.get("change_percent") is not None
     ]
     rows.sort(key=lambda row: float(row[1]), reverse=True)
-    lines = ["<b>📊 Comparación de mercados tradicionales · temporalidad 24 h · 5d</b>", ""]
+    lines = ["<b>📊 Comparación de mercados tradicionales · temporalidad 24 h · 5 d</b>", ""]
     if not rows:
         lines.append("No hay datos comparables disponibles.")
         return "\n".join(lines)
     for label, daily, weekly in rows:
         marker = "📈" if daily > 0.05 else "📉" if daily < -0.05 else "➡️"
         weekly_text = (
-            f" · 5d {format_market_change(weekly)}"
+            f" · 5 d {format_market_change(weekly)}"
             if weekly is not None else ""
         )
         lines.append(f"{marker} {label}: 24h {format_market_change(daily)}{weekly_text}")
