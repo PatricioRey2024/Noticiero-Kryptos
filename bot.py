@@ -10,6 +10,7 @@ import xml.etree.ElementTree as ET
 from html import unescape
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
+from zoneinfo import ZoneInfo
 
 
 FED_RSS_URL = "https://www.federalreserve.gov/feeds/press_all.xml"
@@ -70,6 +71,9 @@ MAX_NEWS_AGE_HOURS = 48
 TELEGRAM_MAX_ATTEMPTS = 3
 TELEGRAM_RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
 RUN_MODE = os.environ.get("RUN_MODE", "manual").strip().lower()
+MACRO_PRE_RELEASE_MINUTES = 60
+MACRO_PUBLICATION_LOOKBACK_MINUTES = 15
+MACRO_ALERT_TOLERANCE_MINUTES = 7.5
 
 
 def user_agent():
@@ -734,14 +738,35 @@ def read_bls_official_snapshot(indicator):
     return snapshot
 
 
-def enrich_bls_macro_calendar(events):
-    """Completa el dato anterior con la última observación oficial disponible."""
+def macro_reference_period(event):
+    title = event.get("title", "")
+    match = re.search(
+        r"\\b(January|February|March|April|May|June|July|August|September|"
+        r"October|November|December)\\s+(20\\d{2})\\b",
+        title,
+        re.IGNORECASE,
+    )
+    if not match:
+        return None
+    month_numbers = {
+        name: index for index, name in enumerate(
+            ("January", "February", "March", "April", "May", "June",
+             "July", "August", "September", "October", "November", "December"),
+            start=1,
+        )
+    }
+    return int(match.group(2)), f"M{month_numbers[match.group(1).title()]:02d}"
+
+
+def enrich_bls_macro_calendar(events, now=None):
+    """Completa valores BLS sólo cuando el período oficial coincide."""
     indicator_snapshots = {}
     for indicator in ("CPI", "PPI", "Employment Situation"):
         try:
             indicator_snapshots[indicator] = read_bls_official_snapshot(indicator)
         except Exception as error:
             print(f"Datos BLS no disponibles para {indicator}: {error}")
+    now = now or datetime.now(timezone.utc)
     for event in events:
         title = event.get("title", "").lower()
         if "consumer price index" in title:
@@ -766,6 +791,18 @@ def enrich_bls_macro_calendar(events):
             f"{actual.get('year')}-{actual.get('period')}"
             if actual.get("year") and actual.get("period") else None
         )
+        release = parse_macro_event_datetime(event)
+        reference_period = macro_reference_period(event)
+        if (
+            release is not None
+            and release <= now
+            and reference_period
+            and actual.get("year") == str(reference_period[0])
+            and actual.get("period") == reference_period[1]
+        ):
+            event["actual"] = actual.get("actual")
+            event["core_actual"] = core.get("actual")
+            event["status"] = "published · dato oficial disponible"
     return events
 
 
@@ -942,6 +979,132 @@ def format_macro_event(event):
         f"Fuente: {'Oficina de Estadísticas Laborales de EE. UU. (BLS)' if not is_bea else 'Oficina de Análisis Económico de EE. UU. (BEA)'}",
     ])
     return "\n".join(lines)
+
+def parse_macro_event_datetime(event):
+    """Convierte la hora ET publicada por BLS/BEA a UTC."""
+    value = str(event.get("date", ""))
+    match = re.search(
+        r"([A-Za-z]+)\\s+(\\d{1,2}),\\s+(\\d{4})\\s+·\\s+"
+        r"(\\d{1,2}):(\\d{2})\\s+([AP]M)\\s+ET",
+        value,
+        re.IGNORECASE,
+    )
+    if not match:
+        return None
+    month_name, day, year, hour, minute, meridiem = match.groups()
+    month_numbers = {
+        name: index for index, name in enumerate(
+            ("January", "February", "March", "April", "May", "June",
+             "July", "August", "September", "October", "November", "December"),
+            start=1,
+        )
+    }
+    month = month_numbers.get(month_name.title())
+    if month is None:
+        return None
+    hour = int(hour) % 12 + (12 if meridiem.upper() == "PM" else 0)
+    return datetime(
+        int(year), month, int(day), hour, int(minute),
+        tzinfo=ZoneInfo("America/New_York"),
+    ).astimezone(timezone.utc)
+
+
+def macro_event_id(event):
+    return "|".join([
+        event.get("source", "macro"),
+        event.get("start_date", ""),
+        event.get("title", ""),
+    ])
+
+
+def macro_alert_window(event, now=None):
+    now = now or datetime.now(timezone.utc)
+    release = parse_macro_event_datetime(event)
+    if release is None:
+        return None
+    minutes_until_release = (release - now).total_seconds() / 60
+    if abs(minutes_until_release - MACRO_PRE_RELEASE_MINUTES) <= MACRO_ALERT_TOLERANCE_MINUTES:
+        return "pre_release"
+    if -MACRO_PUBLICATION_LOOKBACK_MINUTES <= minutes_until_release <= 0:
+        return "publication"
+    return None
+
+
+def format_macro_alert(event, phase):
+    source = event.get("source", "fuente oficial")
+    source_name = "BLS" if "Labor" in source else "BEA/Fed"
+    if phase == "pre_release":
+        heading = "⏰ NOTIKRYPTOS · AVISO MACRO · 1 HORA ANTES"
+        status = "🟡 PROGRAMADO · Esperado no oficial"
+    else:
+        heading = "📣 NOTIKRYPTOS · DATO MACRO PUBLICADO"
+        status = "✅ PUBLICADO · Real con fuente oficial"
+    lines = [
+        heading,
+        "",
+        f"🗓️ {translate_macro_title(event.get('title', 'Evento macroeconómico'))}",
+        f"📅 {translate_macro_date(event.get('date', 'Fecha no disponible'))}",
+        "",
+        f"Anterior: {format_macro_metric(event, event.get('previous'), 'previous')}",
+        f"Esperado: {format_macro_metric(event, event.get('expected'), 'expected')}",
+    ]
+    if phase == "publication":
+        lines.append(
+            f"Real: {format_macro_metric(event, event.get('actual'), 'actual')}"
+        )
+    else:
+        lines.append("Real: pendiente de publicación oficial")
+    lines.extend([
+        "",
+        status,
+        f"Fuente: {source_name} · {source}",
+        f"🔗 {event.get('link', 'Enlace no disponible')}",
+    ])
+    return "\n".join(lines)
+
+
+def run_macro_alerts(state):
+    """Publica un aviso una hora antes y otro cuando el dato ya está disponible."""
+    now = datetime.now(timezone.utc)
+    events = []
+    try:
+        events.extend(enrich_bls_macro_calendar(read_bls_macro_calendar(), now=now))
+    except Exception as error:
+        print(f"Agenda BLS no disponible para alertas: {error}")
+    try:
+        events.extend(read_fomc_agenda())
+    except Exception as error:
+        print(f"Agenda FOMC no disponible para alertas: {error}")
+    try:
+        events.extend(read_bea_macro_calendar())
+    except Exception as error:
+        print(f"Agenda BEA no disponible para alertas: {error}")
+
+    sent = state.setdefault("macro_alerts_sent", {})
+    published = 0
+    for event in events:
+        phase = macro_alert_window(event, now)
+        if phase is None:
+            continue
+        if phase == "publication" and event.get("actual") in (None, ""):
+            print(f"Dato oficial todavía no verificable: {event.get('title')}")
+            continue
+        key = f"{macro_event_id(event)}|{phase}"
+        if key in sent:
+            continue
+        delivery = send_message(format_macro_alert(event, phase))
+        sent[key] = {
+            "phase": phase,
+            "telegram_message_id": delivery.get("message_id"),
+            "telegram_chat_id": delivery.get("chat_id"),
+            "telegram_date": delivery.get("date"),
+            "recorded_at": now.isoformat(),
+        }
+        published += 1
+    if published:
+        save_state(state)
+    print(f"Alertas macro: {published} aviso(s) publicado(s).")
+
 
 def format_weekly_report(state, agenda, macro_agenda=None, bea_agenda=None):
     now = datetime.now(timezone.utc)
@@ -1355,6 +1518,10 @@ def main():
                 "Resumen diario de mercado enviado a Telegram. "
                 f"message_id={delivery.get('message_id')}"
             )
+
+    if run_mode == "macro_alerts":
+        run_macro_alerts(state)
+        return
 
     if run_mode == "weekly":
         try:
