@@ -71,6 +71,22 @@ class BotStateTests(unittest.TestCase):
         self.assertIn("Real: pendiente", text)
         self.assertIn("Core real: pendiente", text)
 
+    def test_parse_macro_event_datetime_converts_et_to_utc(self):
+        event = {"date": "November 10, 2026 · 08:30 AM ET"}
+        parsed = bot.parse_macro_event_datetime(event)
+        self.assertEqual(parsed.isoformat(), "2026-11-10T13:30:00+00:00")
+
+    def test_macro_alert_window_only_matches_one_hour_before(self):
+        event = {
+            "date": "November 10, 2026 · 08:30 AM ET",
+            "title": "Consumer Price Index · November 2026",
+        }
+        now = bot.datetime(2026, 11, 10, 12, 30, tzinfo=bot.timezone.utc)
+        self.assertEqual(bot.macro_alert_window(event, now), "pre_release")
+        now = bot.datetime(2026, 11, 9, 13, 30, tzinfo=bot.timezone.utc)
+        self.assertIsNone(bot.macro_alert_window(event, now))
+
+
 class MessageTests(unittest.TestCase):
     def test_build_message_preserves_source_and_link(self):
         message = bot.build_message(
