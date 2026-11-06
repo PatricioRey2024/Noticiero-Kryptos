@@ -932,7 +932,7 @@ def translate_macro_title(title):
 
 def format_macro_metric(event, value, field):
     if value in (None, ""):
-        return format_macro_value(value, "N/D" if field != "actual" else "pendiente")
+        return format_macro_value(value, "N/D" if field not in {"actual", "core_actual"} else "pendiente")
     title = event.get("title", "")
     if "Employment Situation" in title and field in {"previous", "actual"}:
         return f"{format_macro_value(value)} miles de empleos"
