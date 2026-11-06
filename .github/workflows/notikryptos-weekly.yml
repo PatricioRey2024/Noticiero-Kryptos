@@ -36,7 +36,9 @@ jobs:
           CMC_API_KEY: ${{ secrets.CMC_API_KEY }}
         run: python bot.py
 
+      # Las pruebas manuales desde una rama no deben escribir state.json en main.
       - name: Guardar estado
+        if: github.ref == 'refs/heads/main'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
