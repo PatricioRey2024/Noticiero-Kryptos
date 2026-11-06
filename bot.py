@@ -976,7 +976,7 @@ def format_macro_event(event):
             "Core",
             f"Anterior: {format_macro_metric(event, event.get('core_previous'), 'core_previous')}",
             f"Esperado: {format_macro_metric(event, event.get('core_expected'), 'core_expected')}",
-            f"Real: {format_macro_metric(event, event.get('core_actual'), 'core_actual')}",
+            f"Core real: {format_macro_metric(event, event.get('core_actual'), 'core_actual')}",
         ])
     lines.extend([
         "",
