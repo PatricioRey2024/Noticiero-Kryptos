@@ -43,6 +43,41 @@ OFFICIAL_TECH_FEEDS = [
     ("Microsoft AI", "https://www.microsoft.com/en-us/microsoft-cloud/blog/feed//"),
 ]
 
+FUNDAMENTAL_RSS_FEEDS = [
+    (
+        "EIA - Energía",
+        "https://www.eia.gov/rss/todayinenergy.xml",
+        (
+            "oil crude petroleum wti brent energy supply production refinery "
+            "tanker shipping pipeline opec gasoline diesel"
+        ).split(),
+    ),
+    (
+        "EIA - Comunicados",
+        "https://www.eia.gov/rss/press_rss.xml",
+        (
+            "oil crude petroleum wti brent energy supply production refinery "
+            "tanker shipping pipeline opec gasoline diesel"
+        ).split(),
+    ),
+    (
+        "ONU Ginebra - Comunicados",
+        "https://www.ungeneva.org/news-media/press-releases-list/rss.xml",
+        (
+            "war conflict ceasefire peace negotiation security iran israel gaza "
+            "ukraine russia sanctions energy oil gold"
+        ).split(),
+    ),
+    (
+        "ONU Ginebra - Reuniones",
+        "https://www.ungeneva.org/news-media/meeting-summaries-list/rss.xml",
+        (
+            "war conflict ceasefire peace negotiation security iran israel gaza "
+            "ukraine russia sanctions energy oil gold"
+        ).split(),
+    ),
+]
+
 YAHOO_MARKET_SYMBOLS = {
     "DXY": "DX-Y.NYB",
     "XAU": "GC=F",
@@ -1532,6 +1567,72 @@ def read_bls_news():
     return news
 
 
+def read_fundamental_rss_feed(source_name, feed_url, keywords):
+    request = urllib.request.Request(feed_url, headers=rss_headers())
+    with urllib.request.urlopen(request, timeout=30) as response:
+        root = ET.fromstring(response.read())
+    candidates = []
+    for element in root.iter():
+        if element.tag.split("}")[-1] not in {"item", "entry"}:
+            continue
+        values = {}
+        link = ""
+        for child in element:
+            name = child.tag.split("}")[-1]
+            if name in {
+                "title", "pubDate", "published", "updated", "date",
+                "description", "summary", "content",
+            }:
+                values.setdefault(name, (child.text or "").strip())
+            if name == "link":
+                link = (
+                    child.attrib.get("href", "")
+                    or child.text
+                    or ""
+                ).strip()
+        title = values.get("title") or "Sin título"
+        details = (
+            values.get("description")
+            or values.get("summary")
+            or values.get("content")
+            or ""
+        )
+        text = f"{title} {details}".lower()
+        if not any(keyword in text for keyword in keywords):
+            continue
+        published = next(
+            (
+                values.get(key)
+                for key in ("pubDate", "published", "updated", "date")
+                if values.get(key)
+            ),
+            "",
+        )
+        canonical_link = link or feed_url
+        candidates.append({
+            "id": f"fundamental:{source_name}:{canonical_link or title}",
+            "source": source_name,
+            "title": title,
+            "link": canonical_link,
+            "published": published,
+            "details": details,
+        })
+    print(f"{source_name}: {len(candidates)} publicaciones fundamentales detectadas.")
+    return candidates
+
+
+def read_fundamental_news():
+    news = []
+    for source_name, feed_url, keywords in FUNDAMENTAL_RSS_FEEDS:
+        try:
+            news.extend(read_fundamental_rss_feed(source_name, feed_url, keywords))
+        except urllib.error.HTTPError as error:
+            print(f"{source_name} no disponible temporalmente: HTTP {error.code}")
+        except Exception as error:
+            print(f"Error consultando {source_name}: {error}")
+    return news
+
+
 def read_official_tech_news():
     news = []
     for source_name, feed_url in OFFICIAL_TECH_FEEDS:
@@ -1584,6 +1685,7 @@ def collect_news():
         ("Binance", read_binance_news),
         ("BLS", read_bls_news),
         ("Tecnología e IA", read_official_tech_news),
+        ("Fuentes fundamentales", read_fundamental_news),
     ]
     for label, reader in sources:
         try:
