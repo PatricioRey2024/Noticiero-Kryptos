@@ -328,11 +328,34 @@ def read_coinmarketcap_market():
     return {"quotes": data}
 
 
+def read_yahoo_intraday_change(symbol):
+    request = urllib.request.Request(
+        f"{YAHOO_CHART_URL}{urllib.parse.quote(symbol, safe='')}?range=2d&interval=1h",
+        headers={"Accept": "application/json", "User-Agent": user_agent()},
+    )
+    with urllib.request.urlopen(request, timeout=30) as response:
+        result = json.loads(response.read().decode("utf-8"))
+    chart = (result.get("chart") or {}).get("result") or []
+    if not chart:
+        return None
+    quotes = ((chart[0].get("indicators") or {}).get("quote") or [])
+    closes = (quotes[0] if quotes else {}).get("close") or []
+    closes = [float(value) for value in closes if value is not None]
+    if len(closes) < 5 or closes[-5] == 0:
+        return None
+    return ((closes[-1] - closes[-5]) / closes[-5]) * 100
+
+
 def read_binance_four_hour_changes():
-    """Calcula variaciones de 4 horas con velas públicas de Binance."""
-    symbols = {"BTC": "BTCUSDT", "ETH": "ETHUSDT", "SOL": "SOLUSDT", "NEAR": "NEARUSDT"}
+    """Calcula variaciones de 4 horas y usa Yahoo como respaldo."""
+    symbols = {
+        "BTC": ("BTCUSDT", "BTC-USD"),
+        "ETH": ("ETHUSDT", "ETH-USD"),
+        "SOL": ("SOLUSDT", "SOL-USD"),
+        "NEAR": ("NEARUSDT", "NEAR-USD"),
+    }
     changes = {}
-    for name, symbol in symbols.items():
+    for name, (symbol, fallback_symbol) in symbols.items():
         query = urllib.parse.urlencode({
             "symbol": symbol,
             "interval": "1h",
@@ -346,16 +369,25 @@ def read_binance_four_hour_changes():
             with urllib.request.urlopen(request, timeout=20) as response:
                 candles = json.loads(response.read().decode("utf-8"))
             closes = [float(candle[4]) for candle in candles if len(candle) > 4]
-            if len(closes) < 5 or closes[-5] == 0:
+            if len(closes) >= 5 and closes[-5] != 0:
+                changes[name] = ((closes[-1] - closes[-5]) / closes[-5]) * 100
                 continue
-            changes[name] = ((closes[-1] - closes[-5]) / closes[-5]) * 100
         except (urllib.error.HTTPError, urllib.error.URLError, ValueError, IndexError) as error:
             print(f"Binance 4 h no disponible para {name}: {error}")
+        try:
+            fallback = read_yahoo_intraday_change(fallback_symbol)
+            if fallback is not None:
+                changes[name] = fallback
+                print(f"4 h de {name}: respaldo Yahoo Finance chart.")
+            else:
+                print(f"4 h no disponible para {name}: serie insuficiente.")
+        except Exception as error:
+            print(f"4 h no disponible para {name}: {error}")
     return changes
 
 
 def format_coinmarketcap_snapshot(market_data, four_hour_changes=None):
-    lines = ["🪙 NOTIKRYPTOS · Informe técnico cripto", ""]
+    lines = ["<b>🪙 NOTIKRYPTOS · Informe técnico cripto</b>", ""]
     names = {"1": "BTC", "1027": "ETH", "5426": "SOL", "6535": "NEAR"}
     quotes = market_data.get("quotes", {})
     four_hour_changes = four_hour_changes or {}
@@ -380,7 +412,7 @@ def format_coinmarketcap_snapshot(market_data, four_hour_changes=None):
         price = usd.get("price")
         price_text = format_market_number(price)
         four_hour = four_hour_changes.get(symbol)
-        lines.append(f"{symbol}: $" + price_text)
+        lines.append(f"<b>{symbol}: ${price_text}</b>")
         lines.append(
             f"1 h: {format_directional_change(usd.get('percent_change_1h'))} · "
             f"4 h: {format_directional_change(four_hour)} · "
@@ -629,7 +661,7 @@ def format_crypto_comparison(market_data=None):
         ))
     rows = [row for row in rows if row[1] is not None]
     rows.sort(key=lambda row: float(row[1]), reverse=True)
-    lines = ["🪙 Desempeño relativo cripto · temporalidad 24 h · 7d", ""]
+    lines = ["<b>🪙 Desempeño relativo cripto · temporalidad 24 h · 7d</b>", ""]
     if not rows:
         lines.append("No hay datos comparables disponibles.")
         return "\n".join(lines)
@@ -657,7 +689,7 @@ def format_traditional_comparison(traditional_market):
         if item.get("change_percent") is not None
     ]
     rows.sort(key=lambda row: float(row[1]), reverse=True)
-    lines = ["📊 Comparación de mercados tradicionales · temporalidad 24 h · 5d", ""]
+    lines = ["<b>📊 Comparación de mercados tradicionales · temporalidad 24 h · 5d</b>", ""]
     if not rows:
         lines.append("No hay datos comparables disponibles.")
         return "\n".join(lines)
@@ -676,7 +708,7 @@ def format_traditional_comparison(traditional_market):
 
 
 def format_crypto_intermarket_context(pearson_value, traditional_market):
-    lines = ["🔗 Cripto · dólar y activos de riesgo", ""]
+    lines = ["<b>🔗 Cripto · dólar y activos de riesgo</b>", ""]
     for label in ("DXY", "NQ100", "S&P 500", "VIX", "XAU", "OIL", "EUR/USD", "USD/JPY"):
         item = (traditional_market or {}).get(label)
         if item and item.get("change_percent") is not None:
@@ -720,8 +752,8 @@ def format_extended_market_context(
     market_data=None,
     pearson_value=None,
 ):
-    lines = ["📈 NOTIKRYPTOS · Informe técnico de mercados", ""]
-    lines.append("🌐 Mercados tradicionales y divisas")
+    lines = ["<b>📈 NOTIKRYPTOS · Informe técnico de mercados</b>", ""]
+    lines.append("<b>🌐 Mercados tradicionales y divisas</b>")
     for label, item in traditional_market.items():
         updated = datetime.fromtimestamp(item["timestamp"], tz=timezone.utc)
         change = item.get("change_percent")
@@ -1640,7 +1672,7 @@ def split_telegram_message(text, max_length=3900):
     return chunks
 
 
-def send_message(text):
+def send_message(text, parse_mode=None):
     token = os.environ["TELEGRAM_BOT_TOKEN"]
     deliveries = []
     for chunk in split_telegram_message(text):
@@ -1650,6 +1682,8 @@ def send_message(text):
             "text": chunk,
             "disable_web_page_preview": False,
         }
+        if parse_mode:
+            payload["parse_mode"] = parse_mode
         request = urllib.request.Request(
             f"https://api.telegram.org/bot{token}/sendMessage",
             data=json.dumps(payload).encode("utf-8"),
@@ -1778,7 +1812,9 @@ def main():
                 format_crypto_comparison(market_data),
                 format_crypto_intermarket_context(pearson_value, traditional_market),
             ]
-            crypto_delivery = send_message("\n\n".join(crypto_sections))
+            crypto_delivery = send_message(
+                "\n\n".join(crypto_sections), parse_mode="HTML"
+            )
             print(
                 "Informe técnico cripto enviado a Telegram. "
                 f"message_id={crypto_delivery.get('message_id')}"
@@ -1787,7 +1823,8 @@ def main():
             traditional_delivery = send_message(
                 format_extended_market_context(
                     sentiment, traditional_market, market_data, pearson_value
-                )
+                ),
+                parse_mode="HTML",
             )
             print(
                 "Informe técnico de mercados enviado a Telegram. "
