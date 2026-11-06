@@ -10,6 +10,7 @@ import xml.etree.ElementTree as ET
 from html import unescape
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
+from zoneinfo import ZoneInfo
 
 
 FED_RSS_URL = "https://www.federalreserve.gov/feeds/press_all.xml"
@@ -70,6 +71,7 @@ MAX_NEWS_AGE_HOURS = 48
 TELEGRAM_MAX_ATTEMPTS = 3
 TELEGRAM_RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
 RUN_MODE = os.environ.get("RUN_MODE", "manual").strip().lower()
+MACRO_ALERT_TOLERANCE_MINUTES = 7.5
 
 
 def user_agent():
@@ -943,6 +945,116 @@ def format_macro_event(event):
     ])
     return "\n".join(lines)
 
+def macro_event_id(event):
+    return "|".join([
+        event.get("source", "macro"),
+        event.get("start_date", ""),
+        event.get("title", ""),
+    ])
+
+
+def parse_macro_event_datetime(event):
+    """Convierte la fecha de publicación ET de BLS/BEA a UTC."""
+    value = str(event.get("date", ""))
+    match = re.search(
+        r"([A-Za-z]+)\s+(\d{1,2}),\s+(\d{4})\s+·\s+"
+        r"(\d{1,2}):(\d{2})\s+([AP]M)\s+ET",
+        value,
+        re.IGNORECASE,
+    )
+    if not match:
+        return None
+    month_name, day, year, hour, minute, meridiem = match.groups()
+    month_numbers = {
+        name: index for index, name in enumerate(
+            ("January", "February", "March", "April", "May", "June",
+             "July", "August", "September", "October", "November", "December"),
+            start=1,
+        )
+    }
+    month = month_numbers.get(month_name.title())
+    if month is None:
+        return None
+    hour = int(hour) % 12
+    if meridiem.upper() == "PM":
+        hour += 12
+    local_time = datetime(
+        int(year), month, int(day), hour, int(minute),
+        tzinfo=ZoneInfo("America/New_York"),
+    )
+    return local_time.astimezone(timezone.utc)
+
+
+def macro_alert_label(event, now=None):
+    now = now or datetime.now(timezone.utc)
+    release = parse_macro_event_datetime(event)
+    if release is None:
+        return None
+    minutes_until_release = (release - now).total_seconds() / 60
+    if abs(minutes_until_release - 24 * 60) <= MACRO_ALERT_TOLERANCE_MINUTES:
+        return "24 horas"
+    if abs(minutes_until_release - 15) <= MACRO_ALERT_TOLERANCE_MINUTES:
+        return "15 minutos"
+    return None
+
+
+def format_macro_alert(event, label):
+    source = event.get("source", "fuente oficial")
+    source_name = "BLS" if "Labor" in source else "BEA"
+    return "\n".join([
+        "⏰ NOTIKRYPTOS · AVISO MACROECONÓMICO",
+        "",
+        f"📌 Publicación prevista en {label}",
+        f"🗓️ {translate_macro_title(event.get('title', 'Evento macroeconómico'))}",
+        f"📅 {translate_macro_date(event.get('date', 'Fecha no disponible'))}",
+        "",
+        f"Anterior: {format_macro_metric(event, event.get('previous'), 'previous')}",
+        f"Esperado: {format_macro_metric(event, event.get('expected'), 'expected')}",
+        f"Real: {format_macro_metric(event, event.get('actual'), 'actual')}",
+        "",
+        "Estado: 🟡 PROGRAMADO · sin consenso oficial confirmado",
+        f"Fuente: {source_name} · {source}",
+        f"🔗 {event.get('link', 'Enlace no disponible')}",
+    ])
+
+
+def run_macro_alerts(state):
+    """Publica avisos únicos 24 h y 15 min antes de eventos oficiales."""
+    events = []
+    try:
+        bls_events = enrich_bls_macro_calendar(read_bls_macro_calendar())
+        events.extend(bls_events)
+    except Exception as error:
+        print(f"Alertas macro BLS no disponibles: {error}")
+    try:
+        events.extend(read_bea_macro_calendar())
+    except Exception as error:
+        print(f"Alertas macro BEA no disponibles: {error}")
+
+    sent = state.setdefault("macro_alerts_sent", {})
+    now = datetime.now(timezone.utc)
+    published = 0
+    for event in events:
+        label = macro_alert_label(event, now)
+        if label is None:
+            continue
+        key = f"{macro_event_id(event)}|{label}"
+        if key in sent:
+            continue
+        delivery = send_message(format_macro_alert(event, label))
+        sent[key] = {
+            "label": label,
+            "telegram_message_id": delivery.get("message_id"),
+            "telegram_chat_id": delivery.get("chat_id"),
+            "telegram_date": delivery.get("date"),
+            "recorded_at": now.isoformat(),
+        }
+        published += 1
+    if published:
+        save_state(state)
+    print(f"Alertas macro: {published} aviso(s) publicado(s).")
+
+
 def format_weekly_report(state, agenda, macro_agenda=None, bea_agenda=None):
     now = datetime.now(timezone.utc)
     cutoff = now - timedelta(days=7)
@@ -1355,6 +1467,10 @@ def main():
                 "Resumen diario de mercado enviado a Telegram. "
                 f"message_id={delivery.get('message_id')}"
             )
+
+    if run_mode == "macro_alerts":
+        run_macro_alerts(state)
+        return
 
     if run_mode == "weekly":
         try:
