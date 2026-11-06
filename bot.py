@@ -355,7 +355,7 @@ def read_binance_four_hour_changes():
 
 
 def format_coinmarketcap_snapshot(market_data, four_hour_changes=None):
-    lines = ["📊 Estado actual del mercado cripto", ""]
+    lines = ["🪙 NOTIKRYPTOS · Informe técnico cripto", ""]
     names = {"1": "BTC", "1027": "ETH", "5426": "SOL", "6535": "NEAR"}
     quotes = market_data.get("quotes", {})
     four_hour_changes = four_hour_changes or {}
@@ -607,6 +607,89 @@ def format_asset_comparison(market_data=None, traditional_market=None, temporali
     return "\n".join(lines)
 
 
+def format_crypto_comparison(market_data=None):
+    market_data = market_data or {}
+    names = {"1": "BTC", "1027": "ETH", "5426": "SOL", "6535": "NEAR"}
+    quotes = market_data.get("quotes", {})
+    assets = [(asset.get("id", ""), asset) for asset in quotes] if isinstance(quotes, list) else list(quotes.items())
+    rows = []
+    for asset_id, asset in assets:
+        quote = asset.get("quote", {}) if isinstance(asset, dict) else {}
+        if isinstance(quote, list):
+            quote = quote[0] if quote else {}
+        usd = quote.get("USD", {}) if isinstance(quote, dict) and "USD" in quote else quote
+        if isinstance(usd, list):
+            usd = usd[0] if usd else {}
+        if not isinstance(usd, dict):
+            continue
+        rows.append((
+            names.get(str(asset_id), asset.get("symbol", "ACTIVO")),
+            usd.get("percent_change_24h"),
+            usd.get("percent_change_7d"),
+        ))
+    rows = [row for row in rows if row[1] is not None]
+    rows.sort(key=lambda row: float(row[1]), reverse=True)
+    lines = ["🪙 Desempeño relativo cripto · temporalidad 24 h · 7d", ""]
+    if not rows:
+        lines.append("No hay datos comparables disponibles.")
+        return "\n".join(lines)
+    for label, change_24h, change_7d in rows:
+        marker = "📈" if change_24h > 0.05 else "📉" if change_24h < -0.05 else "➡️"
+        lines.append(
+            f"{marker} {label}: 24h {format_market_change(change_24h)} · "
+            f"7d {format_market_change(change_7d)}"
+        )
+    best = rows[0]
+    worst = rows[-1]
+    lines.extend([
+        "",
+        f"Mejor desempeño observado: {best[0]} ({format_market_change(best[1])} en 24 h).",
+        f"Menor desempeño observado: {worst[0]} ({format_market_change(worst[1])} en 24 h).",
+        "Las diferencias se describen como desempeño relativo; no son señales de operación.",
+    ])
+    return "\n".join(lines)
+
+
+def format_traditional_comparison(traditional_market):
+    rows = [
+        (label, item.get("change_percent"), item.get("week_change_percent"))
+        for label, item in (traditional_market or {}).items()
+        if item.get("change_percent") is not None
+    ]
+    rows.sort(key=lambda row: float(row[1]), reverse=True)
+    lines = ["📊 Comparación de mercados tradicionales · temporalidad 24 h · 5d", ""]
+    if not rows:
+        lines.append("No hay datos comparables disponibles.")
+        return "\n".join(lines)
+    for label, daily, weekly in rows:
+        marker = "📈" if daily > 0.05 else "📉" if daily < -0.05 else "➡️"
+        weekly_text = (
+            f" · 5d {format_market_change(weekly)}"
+            if weekly is not None else ""
+        )
+        lines.append(f"{marker} {label}: 24h {format_market_change(daily)}{weekly_text}")
+    lines.extend([
+        "",
+        "La comparación ordena el desempeño observado y no constituye pronóstico.",
+    ])
+    return "\n".join(lines)
+
+
+def format_crypto_intermarket_context(pearson_value, traditional_market):
+    lines = ["🔗 Cripto · dólar y activos de riesgo", ""]
+    for label in ("DXY", "NQ100", "S&P 500", "VIX", "XAU", "OIL", "EUR/USD", "USD/JPY"):
+        item = (traditional_market or {}).get(label)
+        if item and item.get("change_percent") is not None:
+            lines.append(f"{label}: {format_market_change(item['change_percent'])} · 24 h")
+    lines.append("")
+    lines.append(format_correlation(pearson_value, "30 días"))
+    lines.append(
+        "La lectura intermercado describe co-movimientos observados; "
+        "no atribuye causalidad."
+    )
+    return "\n".join(lines)
+
+
 def format_correlation(pearson_value, temporalidad):
     if pearson_value is None:
         return (
@@ -650,11 +733,7 @@ def format_extended_market_context(
         )
     lines.append("Flecha: variación frente al dato anterior · Yahoo Finance chart")
     lines.append("")
-    lines.append(format_asset_comparison(
-        market_data, traditional_market, temporalidad="24 h · 5d/7d"
-    ))
-    lines.append("")
-    lines.append(format_correlation(pearson_value, "30 días"))
+    lines.append(format_traditional_comparison(traditional_market))
     lines.append("")
 
     fear_greed = sentiment.get("fear_greed") or {}
@@ -1646,6 +1725,7 @@ def main():
 
     market_snapshot = ""
     market_data = {}
+    four_hour_changes = {}
     pearson_value = None
     try:
         market_data = read_coinmarketcap_market()
@@ -1680,18 +1760,26 @@ def main():
         print(f"Mercados tradicionales no disponibles: {error}")
 
     if run_mode == "daily":
-        daily_sections = [section for section in (
-            market_snapshot,
-            format_extended_market_context(
-                sentiment, traditional_market, market_data, pearson_value
-            )
-            if sentiment or traditional_market else "",
-        ) if section]
-        if daily_sections:
-            delivery = send_message("\n\n".join(daily_sections))
+        if market_snapshot:
+            crypto_sections = [
+                market_snapshot,
+                format_crypto_comparison(market_data),
+                format_crypto_intermarket_context(pearson_value, traditional_market),
+            ]
+            crypto_delivery = send_message("\n\n".join(crypto_sections))
             print(
-                "Resumen diario de mercado enviado a Telegram. "
-                f"message_id={delivery.get('message_id')}"
+                "Informe técnico cripto enviado a Telegram. "
+                f"message_id={crypto_delivery.get('message_id')}"
+            )
+        if sentiment or traditional_market:
+            traditional_delivery = send_message(
+                format_extended_market_context(
+                    sentiment, traditional_market, market_data, pearson_value
+                )
+            )
+            print(
+                "Informe técnico de mercados enviado a Telegram. "
+                f"message_id={traditional_delivery.get('message_id')}"
             )
 
     if run_mode == "macro_alerts":
