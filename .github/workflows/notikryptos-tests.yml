@@ -5,7 +5,7 @@ on:
     branches: [main]
   push:
     branches:
-      - codex/macro-bea-datos-estructurados
+      - codex/macro-release-alerts-20261106
 
 permissions:
   contents: read
