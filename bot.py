@@ -626,8 +626,8 @@ def format_asset_comparison(market_data=None, traditional_market=None, temporali
         rows.append({
             "label": label,
             "change": item.get("change_percent"),
-            "secondary": item.get("week_change_percent"),
-            "secondary_label": "5 d",
+            "secondary": None,
+            "secondary_label": "",
         })
     rows = [row for row in rows if row.get("change") is not None]
     rows.sort(key=lambda row: float(row["change"]), reverse=True)
@@ -713,29 +713,24 @@ def format_crypto_comparison(market_data=None, four_hour_changes=None):
 
 def format_traditional_comparison(traditional_market):
     rows = [
-        (label, item.get("change_percent"), item.get("week_change_percent"))
+        (label, item.get("change_percent"))
         for label, item in (traditional_market or {}).items()
         if item.get("change_percent") is not None
     ]
     rows.sort(key=lambda row: float(row[1]), reverse=True)
-    lines = ["<b>📊 Comparación de mercados tradicionales · temporalidad 24 h · 5 d</b>", ""]
+    lines = ["<b>📊 Comparación de mercados tradicionales · temporalidad 24 h</b>", ""]
     if not rows:
         lines.append("No hay datos comparables disponibles.")
         return "\n".join(lines)
-    for label, daily, weekly in rows:
+    for label, daily in rows:
         marker = "📈" if daily > 0.05 else "📉" if daily < -0.05 else "➡️"
-        weekly_text = (
-            f" · 5 d {format_market_change(weekly)}"
-            if weekly is not None else ""
-        )
-        lines.append(f"{marker} {label}: 24h {format_market_change(daily)}{weekly_text}")
+        lines.append(f"{marker} {label}: 24 h {format_market_change(daily)}")
         lines.append("────────────────────")
     lines.extend([
         "",
         "La comparación ordena el desempeño observado y no constituye pronóstico.",
     ])
     return "\n".join(lines)
-
 
 def format_crypto_intermarket_context(pearson_value, traditional_market):
     lines = ["<b>🔗 Cripto · dólar y activos de riesgo</b>", ""]
@@ -791,7 +786,6 @@ def format_extended_market_context(
         lines.append(
             f"{direction} {label}: {format_market_number(item.get('close'))} · "
             f"24 h: {format_market_change(change)} · "
-            f"5 d: {format_market_change(item.get('week_change_percent'))} · "
             f"{updated.strftime('%Y-%m-%d %H:%M UTC')}"
         )
         lines.append("")
