@@ -87,6 +87,22 @@ class BotStateTests(unittest.TestCase):
         self.assertIsNone(bot.macro_alert_window(event, now))
 
 
+    def test_calculate_pearson_uses_aligned_returns(self):
+        self.assertAlmostEqual(
+            bot.calculate_pearson([1, 2, 3], [2, 4, 6]),
+            1.0,
+        )
+        self.assertAlmostEqual(
+            bot.calculate_pearson([1, 2, 3], [6, 4, 2]),
+            -1.0,
+        )
+
+    def test_format_correlation_keeps_temporalidad_explicit(self):
+        text = bot.format_correlation(-0.42, "30 días")
+        self.assertIn("temporalidad 30 días", text)
+        self.assertIn("no implica causalidad", text)
+
+
 class MessageTests(unittest.TestCase):
     def test_build_message_preserves_source_and_link(self):
         message = bot.build_message(
