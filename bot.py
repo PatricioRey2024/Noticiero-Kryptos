@@ -347,7 +347,7 @@ def read_yahoo_intraday_change(symbol):
 
 
 def read_binance_four_hour_changes():
-    """Calcula variaciones de 4 horas y usa Yahoo como respaldo."""
+    """Obtiene velas nativas de 4 h y usa Yahoo como respaldo."""
     symbols = {
         "BTC": ("BTCUSDT", "BTC-USD"),
         "ETH": ("ETHUSDT", "ETH-USD"),
@@ -358,8 +358,8 @@ def read_binance_four_hour_changes():
     for name, (symbol, fallback_symbol) in symbols.items():
         query = urllib.parse.urlencode({
             "symbol": symbol,
-            "interval": "1h",
-            "limit": 5,
+            "interval": "4h",
+            "limit": 2,
         })
         request = urllib.request.Request(
             f"{BINANCE_KLINES_URL}?{query}",
@@ -369,9 +369,11 @@ def read_binance_four_hour_changes():
             with urllib.request.urlopen(request, timeout=20) as response:
                 candles = json.loads(response.read().decode("utf-8"))
             closes = [float(candle[4]) for candle in candles if len(candle) > 4]
-            if len(closes) >= 5 and closes[-5] != 0:
-                changes[name] = ((closes[-1] - closes[-5]) / closes[-5]) * 100
+            if len(closes) >= 2 and closes[-2] != 0:
+                changes[name] = ((closes[-1] - closes[-2]) / closes[-2]) * 100
+                print(f"4 h de {name}: Binance, vela nativa de 4 h.")
                 continue
+            print(f"Binance 4 h no disponible para {name}: serie insuficiente.")
         except (urllib.error.HTTPError, urllib.error.URLError, ValueError, IndexError) as error:
             print(f"Binance 4 h no disponible para {name}: {error}")
         try:
@@ -384,7 +386,6 @@ def read_binance_four_hour_changes():
         except Exception as error:
             print(f"4 h no disponible para {name}: {error}")
     return changes
-
 
 def format_coinmarketcap_snapshot(market_data, four_hour_changes=None):
     lines = ["<b>🪙 NOTIKRYPTOS · Informe técnico cripto</b>", ""]
