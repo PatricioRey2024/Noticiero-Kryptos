@@ -576,9 +576,14 @@ def apply_external_macro_data(events, external_events):
             delta_minutes = abs((external_time - event_time).total_seconds() / 60) if event_time else None
             external_title = normalize_binance_title(external.get("title", ""))
             title_overlap = len(set(event_title.split()) & set(external_title.split()))
+            same_day = (
+                event.get("start_date")
+                and external_time.date().isoformat() == event.get("start_date")
+            )
             is_fomc = (
                 "Federal Reserve" in event.get("source", "")
                 and "fomc" in external_title
+                and same_day
             )
             if is_fomc or (delta_minutes is not None and delta_minutes <= 10 and title_overlap >= 1):
                 candidates.append((0 if is_fomc else 1, delta_minutes or 0, external))
