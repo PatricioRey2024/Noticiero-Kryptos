@@ -30,6 +30,7 @@ FOMC_CALENDAR_URL = "https://www.federalreserve.gov/monetarypolicy/fomccalendars
 BLS_SCHEDULE_URL = "https://www.bls.gov/schedule/{year}/"
 BEA_SCHEDULE_URL = "https://www.bea.gov/news/schedule/"
 BLS_API_URL = "https://api.bls.gov/publicAPI/v1/timeseries/data/"
+SHOWMYTRADES_CALENDAR_URL = "https://showmytrades.com/api/public/calendar/v1"
 
 BLS_FEEDS = [
     ("BLS - Inflación CPI", "https://www.bls.gov/feed/cpi.rss"),
@@ -534,6 +535,69 @@ def format_extended_market_context(sentiment, traditional_market):
     return "\n".join(lines)
 
 
+def read_showmytrades_macro_calendar():
+    """Lee consenso no oficial y calendario USD sin usarlo como fuente oficial."""
+    query = urllib.parse.urlencode({
+        "currency": "USD",
+        "impact": "high",
+        "days": 7,
+        "format": "json",
+    })
+    data = http_get_json(f"{SHOWMYTRADES_CALENDAR_URL}?{query}", headers=rss_headers())
+    events = []
+    for item in data.get("events", []):
+        release_time = item.get("time")
+        if not release_time:
+            continue
+        events.append({
+            "id": item.get("id", ""),
+            "title": item.get("title", "Evento macroeconómico USD"),
+            "release_time_utc": release_time,
+            "expected": item.get("forecast") or None,
+            "external_previous": item.get("previous") or None,
+            "external_actual": item.get("actual") or None,
+            "expected_source": "ShowMyTrades · consenso no oficial",
+            "source": "ShowMyTrades · calendario no oficial",
+            "link": "https://showmytrades.com/tools/economic-calendar",
+        })
+    return events
+
+
+def apply_external_macro_data(events, external_events):
+    """Añade consenso no oficial sin reemplazar datos oficiales."""
+    for event in events:
+        event_time = parse_macro_event_datetime(event)
+        event_title = normalize_binance_title(event.get("title", ""))
+        candidates = []
+        for external in external_events:
+            external_time = parse_macro_event_datetime(external)
+            if external_time is None:
+                continue
+            delta_minutes = abs((external_time - event_time).total_seconds() / 60) if event_time else None
+            external_title = normalize_binance_title(external.get("title", ""))
+            title_overlap = len(set(event_title.split()) & set(external_title.split()))
+            is_fomc = (
+                "Federal Reserve" in event.get("source", "")
+                and "fomc" in external_title
+            )
+            if is_fomc or (delta_minutes is not None and delta_minutes <= 10 and title_overlap >= 1):
+                candidates.append((0 if is_fomc else 1, delta_minutes or 0, external))
+        if not candidates:
+            continue
+        _, _, match = sorted(candidates, key=lambda item: (item[0], item[1]))[0]
+        if match.get("release_time_utc"):
+            event["release_time_utc"] = match["release_time_utc"]
+        if match.get("expected"):
+            event["expected"] = match["expected"]
+            event["expected_source"] = match["expected_source"]
+        if not event.get("previous") and match.get("external_previous"):
+            event["previous"] = match["external_previous"]
+            event["previous_source"] = match["expected_source"]
+        if match.get("id"):
+            event["external_calendar_id"] = match["id"]
+    return events
+
+
 def read_fomc_agenda(year=None):
     year = year or datetime.now(timezone.utc).year
     request = urllib.request.Request(FOMC_CALENDAR_URL, headers=rss_headers())
@@ -987,6 +1051,13 @@ def format_macro_event(event):
 
 def parse_macro_event_datetime(event):
     """Convierte la hora ET publicada por BLS/BEA a UTC."""
+    if event.get("release_time_utc"):
+        try:
+            return datetime.fromisoformat(
+                str(event["release_time_utc"]).replace("Z", "+00:00")
+            ).astimezone(timezone.utc)
+        except ValueError:
+            pass
     value = str(event.get("date", ""))
     match = re.search(
         r"([A-Za-z]+)\s+(\d{1,2}),\s+(\d{4})\s+·\s+"
@@ -1051,7 +1122,11 @@ def format_macro_alert(event, phase):
         f"📅 {translate_macro_date(event.get('date', 'Fecha no disponible'))}",
         "",
         f"Anterior: {format_macro_metric(event, event.get('previous'), 'previous')}",
-        f"Esperado: {format_macro_metric(event, event.get('expected'), 'expected')}",
+        f"Esperado: {format_macro_metric(event, event.get('expected'), 'expected')}"
+        + (
+            f" · {event['expected_source']}"
+            if event.get("expected_source") else ""
+        ),
     ]
     if phase == "publication":
         lines.append(
@@ -1072,6 +1147,11 @@ def run_macro_alerts(state):
     """Publica un aviso una hora antes y otro cuando el dato ya está disponible."""
     now = datetime.now(timezone.utc)
     events = []
+    external_events = []
+    try:
+        external_events = read_showmytrades_macro_calendar()
+    except Exception as error:
+        print(f"Consenso macro no oficial no disponible: {error}")
     try:
         events.extend(enrich_bls_macro_calendar(read_bls_macro_calendar(), now=now))
     except Exception as error:
@@ -1084,6 +1164,8 @@ def run_macro_alerts(state):
         events.extend(read_bea_macro_calendar())
     except Exception as error:
         print(f"Agenda BEA no disponible para alertas: {error}")
+    if external_events:
+        events = apply_external_macro_data(events, external_events)
 
     sent = state.setdefault("macro_alerts_sent", {})
     published = 0
