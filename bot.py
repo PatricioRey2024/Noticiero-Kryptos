@@ -413,9 +413,15 @@ def format_coinmarketcap_snapshot(market_data, four_hour_changes=None):
         price_text = format_market_number(price)
         four_hour = four_hour_changes.get(symbol)
         lines.append(f"<b>{symbol}: ${price_text}</b>")
+        one_hour = usd.get("percent_change_1h")
+        four_hour_text = format_directional_change(four_hour)
+        if four_hour is None:
+            four_hour_text += (
+                f" · referencia 1 h: {format_directional_change(one_hour)}"
+            )
         lines.append(
-            f"1 h: {format_directional_change(usd.get('percent_change_1h'))} · "
-            f"4 h: {format_directional_change(four_hour)} · "
+            f"1 h: {format_directional_change(one_hour)} · "
+            f"4 h: {four_hour_text} · "
             f"24 h: {format_directional_change(usd.get('percent_change_24h'))} · "
             f"7 d: {format_directional_change(usd.get('percent_change_7d'))} · "
             f"30 d: {format_directional_change(usd.get('percent_change_30d'))}"
@@ -642,8 +648,9 @@ def format_asset_comparison(market_data=None, traditional_market=None, temporali
     return "\n".join(lines)
 
 
-def format_crypto_comparison(market_data=None):
+def format_crypto_comparison(market_data=None, four_hour_changes=None):
     market_data = market_data or {}
+    four_hour_changes = four_hour_changes or {}
     names = {"1": "BTC", "1027": "ETH", "5426": "SOL", "6535": "NEAR"}
     quotes = market_data.get("quotes", {})
     assets = [(asset.get("id", ""), asset) for asset in quotes] if isinstance(quotes, list) else list(quotes.items())
@@ -657,34 +664,47 @@ def format_crypto_comparison(market_data=None):
             usd = usd[0] if usd else {}
         if not isinstance(usd, dict):
             continue
-        rows.append((
-            names.get(str(asset_id), asset.get("symbol", "ACTIVO")),
-            usd.get("percent_change_24h"),
-            usd.get("percent_change_7d"),
-        ))
-    rows = [row for row in rows if row[1] is not None]
-    rows.sort(key=lambda row: float(row[1]), reverse=True)
-    lines = ["<b>🪙 Desempeño relativo cripto · temporalidad 24 h · 7d</b>", ""]
+        label = names.get(str(asset_id), asset.get("symbol", "ACTIVO"))
+        rows.append({
+            "label": label,
+            "change_1h": usd.get("percent_change_1h"),
+            "change_4h": four_hour_changes.get(label),
+            "change_24h": usd.get("percent_change_24h"),
+            "change_7d": usd.get("percent_change_7d"),
+        })
+    rows = [row for row in rows if row["change_24h"] is not None]
+    rows.sort(key=lambda row: float(row["change_24h"]), reverse=True)
+    lines = [
+        "<b>🪙 Desempeño relativo cripto · temporalidad 1 h · 4 h · 24 h · 7 d</b>",
+        "",
+    ]
     if not rows:
         lines.append("No hay datos comparables disponibles.")
         return "\n".join(lines)
-    for label, change_24h, change_7d in rows:
-        marker = "📈" if change_24h > 0.05 else "📉" if change_24h < -0.05 else "➡️"
+    for row in rows:
+        marker = "📈" if row["change_24h"] > 0.05 else "📉" if row["change_24h"] < -0.05 else "➡️"
+        four_hour_text = format_market_change(row["change_4h"])
+        if row["change_4h"] is None:
+            four_hour_text += (
+                f" · referencia 1 h {format_market_change(row['change_1h'])}"
+            )
         lines.append(
-            f"{marker} {label}: 24h {format_market_change(change_24h)} · "
-            f"7d {format_market_change(change_7d)}"
+            f"{marker} {row['label']}: "
+            f"1 h {format_market_change(row['change_1h'])} · "
+            f"4 h {four_hour_text} · "
+            f"24 h {format_market_change(row['change_24h'])} · "
+            f"7 d {format_market_change(row['change_7d'])}"
         )
         lines.append("────────────────────")
     best = rows[0]
     worst = rows[-1]
     lines.extend([
         "",
-        f"Mejor desempeño observado: {best[0]} ({format_market_change(best[1])} en 24 h).",
-        f"Menor desempeño observado: {worst[0]} ({format_market_change(worst[1])} en 24 h).",
+        f"Mejor desempeño observado: {best['label']} ({format_market_change(best['change_24h'])} en 24 h).",
+        f"Menor desempeño observado: {worst['label']} ({format_market_change(worst['change_24h'])} en 24 h).",
         "Las diferencias se describen como desempeño relativo; no son señales de operación.",
     ])
     return "\n".join(lines)
-
 
 def format_traditional_comparison(traditional_market):
     rows = [
@@ -1817,7 +1837,7 @@ def main():
         if market_snapshot:
             crypto_sections = [
                 market_snapshot,
-                format_crypto_comparison(market_data),
+                format_crypto_comparison(market_data, four_hour_changes),
                 format_crypto_intermarket_context(pearson_value, traditional_market),
             ]
             crypto_delivery = send_message(
