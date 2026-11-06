@@ -1352,7 +1352,7 @@ def run_macro_alerts(state):
     print(f"Alertas macro: {published} aviso(s) publicado(s).")
 
 
-def format_weekly_report(state, agenda, macro_agenda=None, bea_agenda=None):
+def format_weekly_report(state, agenda, macro_agenda=None, bea_agenda=None, market_data=None, traditional_market=None, pearson_value=None):
     now = datetime.now(timezone.utc)
     cutoff = now - timedelta(days=7)
     recent = []
@@ -1393,6 +1393,18 @@ def format_weekly_report(state, agenda, macro_agenda=None, bea_agenda=None):
             lines.append("────────────────────")
     else:
         lines.append("No se pudo consultar el calendario BEA en esta ejecución.")
+    lines.append("")
+    lines.append("📈 RESUMEN TÉCNICO SEMANAL · MERCADOS TRADICIONALES")
+    lines.append("────────────────────")
+    lines.append(format_traditional_comparison(traditional_market or {}))
+    lines.append("")
+    lines.append("🪙 RESUMEN TÉCNICO SEMANAL · CRIPTO")
+    lines.append("────────────────────")
+    lines.append(format_crypto_comparison(market_data or {}))
+    lines.append("")
+    lines.append(format_crypto_intermarket_context(
+        pearson_value, traditional_market or {}
+    ))
     lines.append("")
     lines.append("⚖️ Alcance")
     lines.append("Resumen informativo basado en publicaciones registradas y calendario oficial.")
@@ -1802,7 +1814,10 @@ def main():
                 print(f"Calendario BEA: {len(bea_agenda)} eventos futuros recibidos.")
             except Exception as error:
                 print(f"Calendario BEA no disponible: {error}")
-            weekly_report = format_weekly_report(state, agenda, macro_agenda, bea_agenda)
+            weekly_report = format_weekly_report(
+                state, agenda, macro_agenda, bea_agenda,
+                market_data, traditional_market, pearson_value,
+            )
             try:
                 official_snapshot = format_official_macro_snapshot()
                 if official_snapshot:
