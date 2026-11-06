@@ -741,8 +741,8 @@ def read_bls_official_snapshot(indicator):
 def macro_reference_period(event):
     title = event.get("title", "")
     match = re.search(
-        r"\\b(January|February|March|April|May|June|July|August|September|"
-        r"October|November|December)\\s+(20\\d{2})\\b",
+        r"\b(January|February|March|April|May|June|July|August|September|"
+        r"October|November|December)\s+(20\d{2})\b",
         title,
         re.IGNORECASE,
     )
@@ -984,8 +984,8 @@ def parse_macro_event_datetime(event):
     """Convierte la hora ET publicada por BLS/BEA a UTC."""
     value = str(event.get("date", ""))
     match = re.search(
-        r"([A-Za-z]+)\\s+(\\d{1,2}),\\s+(\\d{4})\\s+·\\s+"
-        r"(\\d{1,2}):(\\d{2})\\s+([AP]M)\\s+ET",
+        r"([A-Za-z]+)\s+(\d{1,2}),\s+(\d{4})\s+·\s+"
+        r"(\d{1,2}):(\d{2})\s+([AP]M)\s+ET",
         value,
         re.IGNORECASE,
     )
