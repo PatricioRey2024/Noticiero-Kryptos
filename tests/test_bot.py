@@ -1,3 +1,4 @@
+import io
 import json
 import tempfile
 import unittest
@@ -101,6 +102,47 @@ class BotStateTests(unittest.TestCase):
         text = bot.format_correlation(-0.42, "30 días")
         self.assertIn("temporalidad 30 días", text)
         self.assertIn("no implica causalidad", text)
+
+    def test_directional_format_uses_simple_arrows(self):
+        self.assertEqual(bot.format_change_with_direction(1.0), "+1,00% ⬆️")
+        self.assertEqual(bot.format_change_with_direction(-1.0), "-1,00% ⬇️")
+        self.assertEqual(bot.format_change_with_direction(0.0), "+0,00% ➡️")
+
+    def test_fundamental_feed_filters_and_preserves_original_link(self):
+        xml = b"""<?xml version="1.0" encoding="UTF-8"?>
+        <rss><channel>
+          <item>
+            <title>Crude oil supply and energy security</title>
+            <link>https://example.gov/oil-release</link>
+            <pubDate>Fri, 06 Nov 2026 20:00:00 GMT</pubDate>
+            <description>Official update about petroleum supply.</description>
+          </item>
+          <item>
+            <title>Administrative notice</title>
+            <link>https://example.gov/other</link>
+            <pubDate>Fri, 06 Nov 2026 20:00:00 GMT</pubDate>
+            <description>Unrelated publication.</description>
+          </item>
+        </channel></rss>"""
+
+        class FakeResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return None
+
+            def read(self):
+                return xml
+
+        with patch.object(bot.urllib.request, "urlopen", return_value=FakeResponse()):
+            news = bot.read_fundamental_rss_feed(
+                "Fuente oficial", "https://example.gov/feed.xml", ["oil", "crude"]
+            )
+
+        self.assertEqual(len(news), 1)
+        self.assertEqual(news[0]["link"], "https://example.gov/oil-release")
+        self.assertEqual(news[0]["source"], "Fuente oficial")
 
 
 class MessageTests(unittest.TestCase):
