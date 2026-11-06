@@ -961,9 +961,14 @@ def format_macro_event(event):
         f"Esperado: {format_macro_metric(event, event.get('expected'), 'expected')}",
         f"Real: {format_macro_metric(event, event.get('actual'), 'actual')}",
     ])
-    has_core = any(
-        event.get(field) not in (None, "")
-        for field in ("core_previous", "core_expected", "core_actual")
+    title_lower = event.get("title", "").lower()
+    has_core = (
+        any(
+            event.get(field) not in (None, "")
+            for field in ("core_previous", "core_expected", "core_actual")
+        )
+        or "cpi" in title_lower
+        or "consumer price index" in title_lower
     )
     if has_core:
         lines.extend([
