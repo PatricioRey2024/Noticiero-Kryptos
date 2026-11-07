@@ -108,6 +108,30 @@ class BotStateTests(unittest.TestCase):
         self.assertEqual(bot.format_change_with_direction(-1.0), "-1,00% ⬇️")
         self.assertEqual(bot.format_change_with_direction(0.0), "+0,00% ➡️")
 
+    def test_daily_macro_report_is_a_report_not_an_alert(self):
+        tomorrow = (bot.datetime.now(
+            bot.ZoneInfo("America/Argentina/Buenos_Aires")
+        ).date() + bot.timedelta(days=1)).isoformat()
+        report = bot.format_daily_macro_report([{
+            "title": "Producer Price Index · November 10, 2026",
+            "date": "November 10, 2026 · 08:30 AM ET",
+            "start_date": tomorrow,
+            "source": "U.S. Bureau of Labor Statistics",
+            "previous": "100",
+            "expected": "101",
+            "actual": None,
+            "core_previous": None,
+            "core_expected": None,
+            "core_actual": None,
+            "status": "scheduled",
+            "link": "https://www.bls.gov/schedule/",
+        }])
+        self.assertIn("Informe macroeconómico diario", report)
+        self.assertIn("Esperado no oficial", report)
+        self.assertIn("Real oficial: pendiente", report)
+        self.assertNotIn("ALERTA", report)
+        self.assertNotIn("1 HORA ANTES", report)
+
     def test_fundamental_feed_filters_and_preserves_original_link(self):
         xml = b"""<?xml version="1.0" encoding="UTF-8"?>
         <rss><channel>
