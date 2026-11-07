@@ -1789,7 +1789,7 @@ def read_fundamental_html_page(source_name, page_url, keywords):
         title_key = re.sub(r"\\W+", " ", title.lower()).strip()
         if link in seen_links or title_key in seen_titles or link == page_url:
             continue
-        anchor_position = html.find(raw_title)
+        anchor_position = html.find(href)
         context = html[max(0, anchor_position - 1200):anchor_position + 1200]
         date_match = re.search(
             r"(20\d{2}[-/]\d{2}[-/]\d{2}|"
@@ -1944,8 +1944,10 @@ Enlace: {news['link']}
 Devolvé únicamente JSON válido con relevance (ALTA, MEDIA, BAJA o DESCARTAR),
 title_es, summary_es e impact_es. Escribí en español formal y natural.
 Usá el concepto 'Impacto potencial en el mercado'. No inventes datos.
-ALTA: hackeo, retiros suspendidos, crisis de liquidez, sanción relevante,
-decisión fuerte de tasas o riesgo financiero amplio.
+ALTA: guerra, conflicto armado, escalada militar, ataque relevante, alto el fuego,
+negociación de paz, sanción relevante, interrupción del suministro de petróleo,
+OPEC, energía crítica, infraestructura energética atacada, crisis de liquidez,
+hackeo sistémico, retiros suspendidos, decisión fuerte de tasas o riesgo financiero amplio.
 MEDIA: incidente operativo relevante, regulación sectorial o hecho que merezca seguimiento.
 BAJA: mantenimiento menor o comunicado administrativo puntual.
 DESCARTAR: promoción, listado, airdrop o información sin impacto identificable.
