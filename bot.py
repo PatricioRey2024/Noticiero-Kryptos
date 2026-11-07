@@ -1402,11 +1402,11 @@ def format_macro_alert(event, phase):
     source = event.get("source", "fuente oficial")
     source_name = "BLS" if "Labor" in source else "BEA/Fed"
     if phase == "pre_release":
-        heading = "⏰ NOTIKRYPTOS · AVISO MACRO · 1 HORA ANTES"
-        status = "🟡 PROGRAMADO · Esperado no oficial"
+        heading = "⏰ NOTIKRYPTOS · RECORDATORIO MACROECONÓMICO · 1 HORA ANTES"
+        status = "🟡 RECORDATORIO DE AGENDA · esperado no oficial"
     else:
-        heading = "📣 NOTIKRYPTOS · DATO MACRO PUBLICADO"
-        status = "✅ PUBLICADO · Real con fuente oficial"
+        heading = "📣 NOTIKRYPTOS · INFORME MACROECONÓMICO · DATO OFICIAL PUBLICADO"
+        status = "✅ INFORME ACTUALIZADO · resultado oficial con fuente oficial"
     lines = [
         heading,
         "",
@@ -1414,7 +1414,7 @@ def format_macro_alert(event, phase):
         f"📅 {translate_macro_date(event.get('date', 'Fecha no disponible'))}",
         "",
         f"Anterior: {format_macro_metric(event, event.get('previous'), 'previous')}",
-        f"Esperado: {format_macro_metric(event, event.get('expected'), 'expected')}"
+        f"Esperado no oficial: {format_macro_metric(event, event.get('expected'), 'expected')}"
         + (
             f" · {event['expected_source']}"
             if event.get("expected_source") else ""
@@ -1422,10 +1422,10 @@ def format_macro_alert(event, phase):
     ]
     if phase == "publication":
         lines.append(
-            f"Real: {format_macro_metric(event, event.get('actual'), 'actual')}"
+            f"Real oficial: {format_macro_metric(event, event.get('actual'), 'actual')}"
         )
     else:
-        lines.append("Real: pendiente de publicación oficial")
+        lines.append("Real oficial: pendiente de publicación oficial")
     lines.extend([
         "",
         status,
@@ -1436,7 +1436,7 @@ def format_macro_alert(event, phase):
 
 
 def run_macro_alerts(state):
-    """Publica un aviso una hora antes y otro cuando el dato ya está disponible."""
+    """Publica un recordatorio de agenda y luego el informe con el resultado oficial."""
     now = datetime.now(timezone.utc)
     events = []
     external_events = []
@@ -1482,7 +1482,7 @@ def run_macro_alerts(state):
         published += 1
     if published:
         save_state(state)
-    print(f"Alertas macro: {published} aviso(s) publicado(s).")
+    print(f"Informe macroeconómico programado: {published} entrega(s) publicada(s).")
 
 
 def collect_macro_agenda():
