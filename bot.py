@@ -2299,7 +2299,11 @@ def main():
         }
         save_state(state)
         processed_any = True
-        print(f"{news['source']}: noticia publicada. Nivel de relevancia: {relevance}.")
+        print(
+            f"{news["source"]}: noticia publicada. Nivel de relevancia: {relevance}. "
+            f"Título: {news["title"]} · message_id={delivery.get("message_id")} · "
+            f"enlace: {news.get("link", "N/D")}"
+        )
     if not processed_any:
         print("No hay noticias nuevas para procesar.")
 
