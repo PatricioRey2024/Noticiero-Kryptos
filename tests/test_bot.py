@@ -70,7 +70,7 @@ class BotStateTests(unittest.TestCase):
         })
         self.assertIn("Anterior: N/D", text)
         self.assertIn("Real oficial: pendiente", text)
-        self.assertIn("Core real: pendiente", text)
+        self.assertIn("Core real oficial: pendiente", text)
 
     def test_parse_macro_event_datetime_converts_et_to_utc(self):
         event = {"date": "November 10, 2026 · 08:30 AM ET"}
