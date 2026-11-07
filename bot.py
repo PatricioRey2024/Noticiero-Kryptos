@@ -1765,6 +1765,11 @@ def read_fundamental_html_page(source_name, page_url, keywords):
         html = response.read().decode("utf-8", errors="replace")
     candidates = []
     seen_links = set()
+    seen_titles = set()
+    allowed_hosts = {
+        "OFAC - Comunicados": {"ofac.treasury.gov"},
+        "LBMA - Noticias oro": {"www.lbma.org.uk", "lbma.org.uk"},
+    }.get(source_name)
     anchor_pattern = re.compile(
         r"""<a\b[^>]*?href=["']([^"']+)["'][^>]*>(.*?)</a>""",
         re.IGNORECASE | re.DOTALL,
@@ -1778,7 +1783,11 @@ def read_fundamental_html_page(source_name, page_url, keywords):
         if not any(keyword in text for keyword in keywords):
             continue
         link = urllib.parse.urljoin(page_url, unescape(href).strip())
-        if link in seen_links or link == page_url:
+        link_host = urllib.parse.urlparse(link).netloc.lower()
+        if allowed_hosts and link_host not in allowed_hosts:
+            continue
+        title_key = re.sub(r"\\W+", " ", title.lower()).strip()
+        if link in seen_links or title_key in seen_titles or link == page_url:
             continue
         anchor_position = html.find(raw_title)
         context = html[max(0, anchor_position - 1200):anchor_position + 1200]
@@ -1791,6 +1800,7 @@ def read_fundamental_html_page(source_name, page_url, keywords):
         )
         published = date_match.group(1) if date_match else ""
         seen_links.add(link)
+        seen_titles.add(title_key)
         candidates.append({
             "id": f"fundamental:{source_name}:{link}",
             "source": source_name,
