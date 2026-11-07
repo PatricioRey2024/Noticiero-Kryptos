@@ -8,6 +8,7 @@ import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 from html import unescape
+from html.parser import HTMLParser
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from zoneinfo import ZoneInfo
@@ -1735,11 +1736,54 @@ def read_fundamental_rss_feed(source_name, feed_url, keywords):
     return candidates
 
 
+
+
+def read_fundamental_html_page(source_name, page_url, keywords):
+    """Lee titulares de una página oficial cuando no existe RSS público estable."""
+    request = urllib.request.Request(page_url, headers=rss_headers())
+    with urllib.request.urlopen(request, timeout=30) as response:
+        html = response.read().decode("utf-8", errors="replace")
+    candidates = []
+    seen_links = set()
+    anchor_pattern = re.compile(
+        r"<a\\b[^>]*?href=[\\"']([^\\"']+)[\\"'][^>]*>(.*?)</a>",
+        re.IGNORECASE | re.DOTALL,
+    )
+    for href, raw_title in anchor_pattern.findall(html):
+        title = re.sub(r"<[^>]+>", " ", raw_title)
+        title = re.sub(r"\\s+", " ", unescape(title)).strip()
+        if len(title) < 24:
+            continue
+        text = title.lower()
+        if not any(keyword in text for keyword in keywords):
+            continue
+        link = urllib.parse.urljoin(page_url, unescape(href).strip())
+        if link in seen_links or link == page_url:
+            continue
+        seen_links.add(link)
+        candidates.append({
+            "id": f"fundamental:{source_name}:{link}",
+            "source": source_name,
+            "title": title,
+            "link": link,
+            "published": "",
+            "details": "",
+        })
+    print(f"{source_name}: {len(candidates)} publicaciones fundamentales detectadas.")
+    return candidates
+
 def read_fundamental_news():
     news = []
     for source_name, feed_url, keywords in FUNDAMENTAL_RSS_FEEDS:
         try:
             news.extend(read_fundamental_rss_feed(source_name, feed_url, keywords))
+        except urllib.error.HTTPError as error:
+            print(f"{source_name} no disponible temporalmente: HTTP {error.code}")
+        except Exception as error:
+            print(f"Error consultando {source_name}: {error}")
+    for source_name, page_url, keywords in FUNDAMENTAL_HTML_SOURCES:
+        try:
+            news.extend(read_fundamental_html_page(source_name, page_url, keywords))
         except urllib.error.HTTPError as error:
             print(f"{source_name} no disponible temporalmente: HTTP {error.code}")
         except Exception as error:
