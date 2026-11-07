@@ -1289,19 +1289,16 @@ def format_macro_metric(event, value, field):
 
 def format_macro_event(event):
     source = event.get("source", "fuente no disponible")
-    is_bea = "Economic Analysis" in source
-    section = "🏛️ BEA · ACTIVIDAD ECONÓMICA" if is_bea else "📈 BLS · INDICADORES MACRO"
+    is_bea = "Economic Analysis" in source or "Economic Analysis" in str(event.get("source", ""))
     title = translate_macro_title(event.get("title", "Evento macroeconómico"))
-    lines = [
-        f"🗓️ {title}",
-    ]
+    lines = ["🗓️ " + title]
     if event.get("date"):
         lines.append(f"📅 {translate_macro_date(event['date'])}")
     lines.extend([
         "",
         f"Anterior: {format_macro_metric(event, event.get('previous'), 'previous')}",
-        f"Esperado: {format_macro_metric(event, event.get('expected'), 'expected')}",
-        f"Real: {format_macro_metric(event, event.get('actual'), 'actual')}",
+        f"Esperado no oficial: {format_macro_metric(event, event.get('expected'), 'expected')}",
+        f"Real oficial: {format_macro_metric(event, event.get('actual'), 'actual')}",
     ])
     title_lower = event.get("title", "").lower()
     has_core = (
@@ -1317,15 +1314,32 @@ def format_macro_event(event):
             "",
             "Core",
             f"Anterior: {format_macro_metric(event, event.get('core_previous'), 'core_previous')}",
-            f"Esperado: {format_macro_metric(event, event.get('core_expected'), 'core_expected')}",
-            f"Core real: {format_macro_metric(event, event.get('core_actual'), 'core_actual')}",
+            f"Esperado no oficial: {format_macro_metric(event, event.get('core_expected'), 'core_expected')}",
+            f"Core real oficial: {format_macro_metric(event, event.get('core_actual'), 'core_actual')}",
         ])
+    status = str(event.get("status", "scheduled"))
+    if "published" in status:
+        status_text = "✅ PUBLICADO · resultado oficial disponible"
+    else:
+        status_text = "🟡 PROGRAMADO · informe de referencia"
+    source_label = (
+        "Oficina de Análisis Económico de EE. UU. (BEA)"
+        if is_bea
+        else "Oficina de Estadísticas Laborales de EE. UU. (BLS)"
+        if "Labor" in source or "Statistics" in source
+        else source
+    )
     lines.extend([
         "",
-        "Estado: 🟡 PROGRAMADO",
-        f"Fuente: {'Oficina de Estadísticas Laborales de EE. UU. (BLS)' if not is_bea else 'Oficina de Análisis Económico de EE. UU. (BEA)'}",
+        f"Estado: {status_text}",
+        f"Fuente oficial: {source_label}",
     ])
+    if event.get("expected_source"):
+        lines.append(f"Fuente del esperado: {event['expected_source']} · no oficial")
+    if event.get("link"):
+        lines.append(f"🔗 {event['link']}")
     return "\n".join(lines)
+
 
 def parse_macro_event_datetime(event):
     """Convierte la hora ET publicada por BLS/BEA a UTC."""
@@ -1469,6 +1483,84 @@ def run_macro_alerts(state):
     if published:
         save_state(state)
     print(f"Alertas macro: {published} aviso(s) publicado(s).")
+
+
+def collect_macro_agenda():
+    """Obtiene agenda macro oficial y completa valores disponibles."""
+    now = datetime.now(timezone.utc)
+    events = []
+    try:
+        events.extend(enrich_bls_macro_calendar(read_bls_macro_calendar(), now=now))
+    except Exception as error:
+        print(f"Calendario BLS no disponible para informes: {error}")
+    try:
+        events.extend(read_bea_macro_calendar())
+    except Exception as error:
+        print(f"Calendario BEA no disponible para informes: {error}")
+    try:
+        events.extend(read_fomc_agenda())
+    except Exception as error:
+        print(f"Calendario FOMC no disponible para informes: {error}")
+    try:
+        external_events = read_showmytrades_macro_calendar()
+        if external_events:
+            events = apply_external_macro_data(events, external_events)
+    except Exception as error:
+        print(f"Consenso no oficial no disponible para informes: {error}")
+    unique = {}
+    for event in events:
+        key = macro_event_id(event)
+        unique[key] = event
+    return sorted(
+        unique.values(),
+        key=lambda event: (event.get("start_date", ""), event.get("title", "")),
+    )
+
+
+def format_daily_macro_report(events):
+    """Informe normal de datos de hoy y agenda de mañana, sin alertas."""
+    argentina_today = datetime.now(
+        ZoneInfo("America/Argentina/Buenos_Aires")
+    ).date()
+    tomorrow = argentina_today + timedelta(days=1)
+    selected = []
+    for event in events:
+        try:
+            event_date = datetime.fromisoformat(
+                str(event.get("start_date", ""))
+            ).date()
+        except ValueError:
+            continue
+        if event_date in {argentina_today, tomorrow}:
+            selected.append(event)
+    if not selected:
+        return ""
+    today_events = [
+        event for event in selected
+        if event.get("start_date") == argentina_today.isoformat()
+    ]
+    tomorrow_events = [
+        event for event in selected
+        if event.get("start_date") == tomorrow.isoformat()
+    ]
+    lines = [
+        "<b>📊 NOTIKRYPTOS · Informe macroeconómico diario</b>",
+        "",
+        "Informe de agenda y resultados macroeconómicos de Estados Unidos.",
+    ]
+    for label, group in (("HOY", today_events), ("MAÑANA", tomorrow_events)):
+        if not group:
+            continue
+        lines.extend(["", f"<b>🇺🇸 {label}</b>", ""])
+        for event in group:
+            lines.append(format_macro_event(event))
+            lines.append("")
+            lines.append("────────────────────")
+    lines.extend([
+        "",
+        "El esperado se identifica como no oficial. El real se muestra únicamente cuando existe confirmación oficial.",
+    ])
+    return "\n".join(lines)
 
 
 def format_weekly_report(state, agenda, macro_agenda=None, bea_agenda=None, market_data=None, traditional_market=None, pearson_value=None):
@@ -1966,6 +2058,11 @@ def main():
             print(f"Mercados tradicionales no disponibles: {error}")
 
     if run_mode == "daily":
+        daily_macro_report = ""
+        try:
+            daily_macro_report = format_daily_macro_report(collect_macro_agenda())
+        except Exception as error:
+            print(f"Informe macroeconómico diario no disponible: {error}")
         if market_snapshot:
             crypto_sections = [
                 market_snapshot,
@@ -1989,6 +2086,12 @@ def main():
             print(
                 "Informe técnico de mercados enviado a Telegram. "
                 f"message_id={traditional_delivery.get('message_id')}"
+            )
+        if daily_macro_report:
+            macro_delivery = send_message(daily_macro_report, parse_mode="HTML")
+            print(
+                "Informe macroeconómico diario enviado a Telegram. "
+                f"message_id={macro_delivery.get('message_id')}"
             )
 
     if run_mode == "macro_alerts":
