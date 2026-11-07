@@ -1773,7 +1773,7 @@ def read_fundamental_html_page(source_name, page_url, keywords):
     candidates = []
     seen_links = set()
     anchor_pattern = re.compile(
-        r"<a\\b[^>]*?href=[\\"']([^\\"']+)[\\"'][^>]*>(.*?)</a>",
+        r"""<a\b[^>]*?href=["']([^"']+)["'][^>]*>(.*?)</a>""",
         re.IGNORECASE | re.DOTALL,
     )
     for href, raw_title in anchor_pattern.findall(html):
