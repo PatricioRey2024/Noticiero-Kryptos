@@ -81,6 +81,14 @@ FUNDAMENTAL_RSS_FEEDS = [
 
 FUNDAMENTAL_HTML_SOURCES = [
     (
+        "OFAC - Comunicados",
+        "https://ofac.treasury.gov/press-releases",
+        (
+            "sanctions designation designated iran russia cuba terrorism "
+            "gold oil maritime energy"
+        ).split(),
+    ),
+    (
         "OPEC - Comunicados",
         "https://www.opec.org/press-releases.html",
         (
