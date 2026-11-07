@@ -1927,37 +1927,43 @@ def main():
     market_data = {}
     four_hour_changes = {}
     pearson_value = None
-    try:
-        market_data = read_coinmarketcap_market()
-        four_hour_changes = read_binance_four_hour_changes()
-        market_snapshot = format_coinmarketcap_snapshot(market_data, four_hour_changes)
-        print(market_snapshot)
-    except urllib.error.HTTPError as error:
-        body = error.read().decode("utf-8", errors="replace")
-        print(f"CoinMarketCap no disponible: HTTP {error.code} — {body}")
-    except Exception as error:
-        print(f"Error consultando CoinMarketCap: {error}")
-
     sentiment = {}
-    try:
-        sentiment = read_cmc_sentiment()
-    except Exception as error:
-        print(f"CoinMarketCap: sentimiento no disponible: {error}")
-        try:
-            sentiment["fear_greed"] = read_alternative_me_fear_greed()
-            print("Fear & Greed: datos recibidos desde Alternative.me.")
-        except Exception as fallback_error:
-            print(f"Fear & Greed: fallback no disponible: {fallback_error}")
-
     traditional_market = {}
-    try:
-        pearson_value = read_dxy_btc_pearson(30)
-    except Exception as error:
-        print(f"Correlación DXY/BTC no disponible: {error}")
-    try:
-        traditional_market = read_yahoo_market_data()
-    except Exception as error:
-        print(f"Mercados tradicionales no disponibles: {error}")
+
+    # Los datos de mercado pertenecen a los informes diario y semanal.
+    # Las alertas de noticias no deben ejecutar ni mostrar este bloque.
+    if run_mode in {"daily", "weekly"}:
+        try:
+            market_data = read_coinmarketcap_market()
+            four_hour_changes = read_binance_four_hour_changes()
+            market_snapshot = format_coinmarketcap_snapshot(
+                market_data, four_hour_changes
+            )
+            print(market_snapshot)
+        except urllib.error.HTTPError as error:
+            body = error.read().decode("utf-8", errors="replace")
+            print(f"CoinMarketCap no disponible: HTTP {error.code} — {body}")
+        except Exception as error:
+            print(f"Error consultando CoinMarketCap: {error}")
+
+        try:
+            sentiment = read_cmc_sentiment()
+        except Exception as error:
+            print(f"CoinMarketCap: sentimiento no disponible: {error}")
+            try:
+                sentiment["fear_greed"] = read_alternative_me_fear_greed()
+                print("Fear & Greed: datos recibidos desde Alternative.me.")
+            except Exception as fallback_error:
+                print(f"Fear & Greed: fallback no disponible: {fallback_error}")
+
+        try:
+            pearson_value = read_dxy_btc_pearson(30)
+        except Exception as error:
+            print(f"Correlación DXY/BTC no disponible: {error}")
+        try:
+            traditional_market = read_yahoo_market_data()
+        except Exception as error:
+            print(f"Mercados tradicionales no disponibles: {error}")
 
     if run_mode == "daily":
         if market_snapshot:
