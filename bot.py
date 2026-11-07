@@ -8,7 +8,6 @@ import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 from html import unescape
-from html.parser import HTMLParser
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from zoneinfo import ZoneInfo
@@ -75,6 +74,34 @@ FUNDAMENTAL_RSS_FEEDS = [
         (
             "war conflict ceasefire peace negotiation security iran israel gaza "
             "ukraine russia sanctions energy oil gold"
+        ).split(),
+    ),
+]
+
+
+FUNDAMENTAL_HTML_SOURCES = [
+    (
+        "OPEC - Comunicados",
+        "https://www.opec.org/press-releases.html",
+        (
+            "oil crude petroleum production supply opec energy market stability "
+            "maritime shipping"
+        ).split(),
+    ),
+    (
+        "IEA - Noticias",
+        "https://www.iea.org/news/",
+        (
+            "oil crude petroleum energy security supply shock gas electricity "
+            "maritime middle east conflict"
+        ).split(),
+    ),
+    (
+        "LBMA - Noticias oro",
+        "https://www.lbma.org.uk/newsroom",
+        (
+            "gold bullion precious metals reserve sanctions geopolitics "
+            "market integrity"
         ).split(),
     ),
 ]
