@@ -1517,6 +1517,28 @@ def collect_macro_agenda():
     )
 
 
+def filter_next_week_events(events):
+    """Limita la agenda del informe semanal a los próximos siete días."""
+    argentina_today = datetime.now(
+        ZoneInfo("America/Argentina/Buenos_Aires")
+    ).date()
+    end_date = argentina_today + timedelta(days=7)
+    filtered = []
+    for event in events:
+        try:
+            event_date = datetime.fromisoformat(
+                str(event.get("start_date", ""))
+            ).date()
+        except ValueError:
+            continue
+        if argentina_today <= event_date < end_date:
+            filtered.append(event)
+    return sorted(
+        filtered,
+        key=lambda event: (event.get("start_date", ""), event.get("title", "")),
+    )
+
+
 def format_daily_macro_report(events):
     """Informe normal de datos de hoy y agenda de mañana, sin alertas."""
     argentina_today = datetime.now(
@@ -2100,20 +2122,20 @@ def main():
 
     if run_mode == "weekly":
         try:
-            agenda = read_fomc_agenda()
-            macro_agenda = []
-            try:
-                macro_agenda = read_bls_macro_calendar()
-                macro_agenda = enrich_bls_macro_calendar(macro_agenda)
-                print(f"Calendario BLS: {len(macro_agenda)} eventos futuros recibidos.")
-            except Exception as error:
-                print(f"Calendario BLS no disponible: {error}")
-            bea_agenda = []
-            try:
-                bea_agenda = read_bea_macro_calendar()
-                print(f"Calendario BEA: {len(bea_agenda)} eventos futuros recibidos.")
-            except Exception as error:
-                print(f"Calendario BEA no disponible: {error}")
+            all_macro_events = collect_macro_agenda()
+            agenda = filter_next_week_events(
+                [event for event in all_macro_events if event.get("source") == "Federal Reserve"]
+            )
+            macro_agenda = filter_next_week_events(
+                [event for event in all_macro_events if "Labor" in event.get("source", "")]
+            )
+            bea_agenda = filter_next_week_events(
+                [event for event in all_macro_events if "Economic Analysis" in event.get("source", "")]
+            )
+            print(
+                f"Agenda macroeconómica semanal: {len(all_macro_events)} eventos "
+                f"en la próxima semana."
+            )
             weekly_report = format_weekly_report(
                 state, agenda, macro_agenda, bea_agenda,
                 market_data, traditional_market, pearson_value,
