@@ -89,22 +89,6 @@ FUNDAMENTAL_HTML_SOURCES = [
         ).split(),
     ),
     (
-        "OPEC - Comunicados",
-        "https://www.opec.org/press-releases.html",
-        (
-            "oil crude petroleum production supply opec energy market stability "
-            "maritime shipping"
-        ).split(),
-    ),
-    (
-        "IEA - Noticias",
-        "https://www.iea.org/news/",
-        (
-            "oil crude petroleum energy security supply shock gas electricity "
-            "maritime middle east conflict"
-        ).split(),
-    ),
-    (
         "LBMA - Noticias oro",
         "https://www.lbma.org.uk/newsroom",
         (
@@ -208,7 +192,8 @@ def format_published_date(value):
 def rss_headers():
     return {
         "User-Agent": user_agent(),
-        "Accept": "application/rss+xml, application/xml",
+        "Accept": "application/rss+xml, application/xml, text/xml, text/html;q=0.9, */*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.8",
     }
 
 
@@ -1795,13 +1780,23 @@ def read_fundamental_html_page(source_name, page_url, keywords):
         link = urllib.parse.urljoin(page_url, unescape(href).strip())
         if link in seen_links or link == page_url:
             continue
+        anchor_position = html.find(raw_title)
+        context = html[max(0, anchor_position - 1200):anchor_position + 1200]
+        date_match = re.search(
+            r"(20\d{2}[-/]\d{2}[-/]\d{2}|"
+            r"\d{1,2}\s+(?:January|February|March|April|May|June|July|August|"
+            r"September|October|November|December)\s+20\d{2})",
+            unescape(context),
+            re.IGNORECASE,
+        )
+        published = date_match.group(1) if date_match else ""
         seen_links.add(link)
         candidates.append({
             "id": f"fundamental:{source_name}:{link}",
             "source": source_name,
             "title": title,
             "link": link,
-            "published": "",
+            "published": published,
             "details": "",
         })
     print(f"{source_name}: {len(candidates)} publicaciones fundamentales detectadas.")
