@@ -10,6 +10,7 @@ import xml.etree.ElementTree as ET
 from html import unescape
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
+from zoneinfo import ZoneInfo
 
 
 FED_RSS_URL = "https://www.federalreserve.gov/feeds/press_all.xml"
@@ -29,6 +30,7 @@ FOMC_CALENDAR_URL = "https://www.federalreserve.gov/monetarypolicy/fomccalendars
 BLS_SCHEDULE_URL = "https://www.bls.gov/schedule/{year}/"
 BEA_SCHEDULE_URL = "https://www.bea.gov/news/schedule/"
 BLS_API_URL = "https://api.bls.gov/publicAPI/v1/timeseries/data/"
+SHOWMYTRADES_CALENDAR_URL = "https://showmytrades.com/api/public/calendar/v1"
 
 BLS_FEEDS = [
     ("BLS - Inflación CPI", "https://www.bls.gov/feed/cpi.rss"),
@@ -41,12 +43,50 @@ OFFICIAL_TECH_FEEDS = [
     ("Microsoft AI", "https://www.microsoft.com/en-us/microsoft-cloud/blog/feed//"),
 ]
 
+FUNDAMENTAL_RSS_FEEDS = [
+    (
+        "EIA - Energía",
+        "https://www.eia.gov/rss/todayinenergy.xml",
+        (
+            "oil crude petroleum wti brent energy supply production refinery "
+            "tanker shipping pipeline opec gasoline diesel"
+        ).split(),
+    ),
+    (
+        "EIA - Comunicados",
+        "https://www.eia.gov/rss/press_rss.xml",
+        (
+            "oil crude petroleum wti brent energy supply production refinery "
+            "tanker shipping pipeline opec gasoline diesel"
+        ).split(),
+    ),
+    (
+        "ONU Ginebra - Comunicados",
+        "https://www.ungeneva.org/news-media/press-releases-list/rss.xml",
+        (
+            "war conflict ceasefire peace negotiation security iran israel gaza "
+            "ukraine russia sanctions energy oil gold"
+        ).split(),
+    ),
+    (
+        "ONU Ginebra - Reuniones",
+        "https://www.ungeneva.org/news-media/meeting-summaries-list/rss.xml",
+        (
+            "war conflict ceasefire peace negotiation security iran israel gaza "
+            "ukraine russia sanctions energy oil gold"
+        ).split(),
+    ),
+]
+
 YAHOO_MARKET_SYMBOLS = {
     "DXY": "DX-Y.NYB",
-    "Oro": "GC=F",
-    "Petróleo WTI": "CL=F",
-    "Nasdaq": "^IXIC",
+    "XAU": "GC=F",
+    "OIL": "CL=F",
+    "Dow Jones": "^DJI",
+    "NQ100": "^NDX",
     "S&P 500": "^GSPC",
+    "EUR/USD": "EURUSD=X",
+    "USD/JPY": "JPY=X",
 }
 
 TREASURY_KEYWORDS = (
@@ -70,6 +110,9 @@ MAX_NEWS_AGE_HOURS = 48
 TELEGRAM_MAX_ATTEMPTS = 3
 TELEGRAM_RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
 RUN_MODE = os.environ.get("RUN_MODE", "manual").strip().lower()
+MACRO_PRE_RELEASE_MINUTES = 60
+MACRO_PUBLICATION_LOOKBACK_MINUTES = 15
+MACRO_ALERT_TOLERANCE_MINUTES = 7.5
 
 
 def user_agent():
@@ -320,15 +363,40 @@ def read_coinmarketcap_market():
     return {"quotes": data}
 
 
+def read_yahoo_intraday_change(symbol, periods=4):
+    request = urllib.request.Request(
+        f"{YAHOO_CHART_URL}{urllib.parse.quote(symbol, safe='')}?range=2d&interval=1h",
+        headers={"Accept": "application/json", "User-Agent": user_agent()},
+    )
+    with urllib.request.urlopen(request, timeout=30) as response:
+        result = json.loads(response.read().decode("utf-8"))
+    chart = (result.get("chart") or {}).get("result") or []
+    if not chart:
+        return None
+    quotes = ((chart[0].get("indicators") or {}).get("quote") or [])
+    closes = (quotes[0] if quotes else {}).get("close") or []
+    closes = [float(value) for value in closes if value is not None]
+    offset = periods + 1
+    if len(closes) < offset or closes[-offset] == 0:
+        return None
+    return ((closes[-1] - closes[-offset]) / closes[-offset]) * 100
+
+
+
 def read_binance_four_hour_changes():
-    """Calcula variaciones de 4 horas con velas públicas de Binance."""
-    symbols = {"BTC": "BTCUSDT", "ETH": "ETHUSDT", "SOL": "SOLUSDT", "NEAR": "NEARUSDT"}
+    """Obtiene velas nativas de 4 h y usa Yahoo como respaldo."""
+    symbols = {
+        "BTC": ("BTCUSDT", "BTC-USD"),
+        "ETH": ("ETHUSDT", "ETH-USD"),
+        "SOL": ("SOLUSDT", "SOL-USD"),
+        "NEAR": ("NEARUSDT", "NEAR-USD"),
+    }
     changes = {}
-    for name, symbol in symbols.items():
+    for name, (symbol, fallback_symbol) in symbols.items():
         query = urllib.parse.urlencode({
             "symbol": symbol,
-            "interval": "1h",
-            "limit": 5,
+            "interval": "4h",
+            "limit": 2,
         })
         request = urllib.request.Request(
             f"{BINANCE_KLINES_URL}?{query}",
@@ -338,25 +406,35 @@ def read_binance_four_hour_changes():
             with urllib.request.urlopen(request, timeout=20) as response:
                 candles = json.loads(response.read().decode("utf-8"))
             closes = [float(candle[4]) for candle in candles if len(candle) > 4]
-            if len(closes) < 5 or closes[-5] == 0:
+            if len(closes) >= 2 and closes[-2] != 0:
+                changes[name] = ((closes[-1] - closes[-2]) / closes[-2]) * 100
+                print(f"4 h de {name}: Binance, vela nativa de 4 h.")
                 continue
-            changes[name] = ((closes[-1] - closes[-5]) / closes[-5]) * 100
+            print(f"Binance 4 h no disponible para {name}: serie insuficiente.")
         except (urllib.error.HTTPError, urllib.error.URLError, ValueError, IndexError) as error:
             print(f"Binance 4 h no disponible para {name}: {error}")
+        try:
+            fallback = read_yahoo_intraday_change(fallback_symbol)
+            if fallback is not None:
+                changes[name] = fallback
+                print(f"4 h de {name}: respaldo Yahoo Finance chart.")
+            else:
+                print(f"4 h no disponible para {name}: serie insuficiente.")
+        except Exception as error:
+            print(f"4 h no disponible para {name}: {error}")
     return changes
 
-
 def format_coinmarketcap_snapshot(market_data, four_hour_changes=None):
-    lines = ["📊 Estado actual del mercado cripto", ""]
+    lines = ["<b>🪙 NOTIKRYPTOS · Informe técnico cripto</b>", ""]
     names = {"1": "BTC", "1027": "ETH", "5426": "SOL", "6535": "NEAR"}
     quotes = market_data.get("quotes", {})
     four_hour_changes = four_hour_changes or {}
     if isinstance(quotes, list):
         assets = [(asset.get("id", ""), asset) for asset in quotes]
     else:
-        assets = quotes.items()
+        assets = list(quotes.items())
 
-    for asset_id, asset in assets:
+    for index, (asset_id, asset) in enumerate(assets):
         quote = asset.get("quote", {}) if isinstance(asset, dict) else {}
         if isinstance(quote, list):
             quote = quote[0] if quote else {}
@@ -372,15 +450,24 @@ def format_coinmarketcap_snapshot(market_data, four_hour_changes=None):
         price = usd.get("price")
         price_text = format_market_number(price)
         four_hour = four_hour_changes.get(symbol)
-        lines.append(f"{symbol}: $" + price_text)
+        lines.append(f"<b>{symbol}: ${price_text}</b>")
+        one_hour = usd.get("percent_change_1h")
+        four_hour_text = format_directional_change(four_hour)
+        if four_hour is None:
+            four_hour_text += (
+                f" · referencia 1 h: {format_directional_change(one_hour)}"
+            )
         lines.append(
-            f"1 h: {format_directional_change(usd.get('percent_change_1h'))} · "
-            f"4 h: {format_directional_change(four_hour)} · "
-            f"24 h: {format_directional_change(usd.get('percent_change_24h'))} · "
-            f"7 d: {format_directional_change(usd.get('percent_change_7d'))} · "
-            f"30 d: {format_directional_change(usd.get('percent_change_30d'))}"
+            f"1 h: {format_change_with_direction(one_hour)} · "
+            f"4 h: {format_change_with_direction(four_hour)} · "
+            f"24 h: {format_change_with_direction(usd.get('percent_change_24h'))} · "
+            f"7 d: {format_change_with_direction(usd.get('percent_change_7d'))} · "
+            f"30 d: {format_change_with_direction(usd.get('percent_change_30d'))}"
         )
         lines.append("")
+        if index < len(assets) - 1:
+            lines.append("────────────────────")
+            lines.append("")
     return "\n".join(lines)
 
 
@@ -421,6 +508,58 @@ def read_alternative_me_fear_greed():
     }
 
 
+def read_yahoo_daily_closes(symbol, range_name="30d"):
+    request = urllib.request.Request(
+        f"{YAHOO_CHART_URL}{urllib.parse.quote(symbol, safe='')}?range={range_name}&interval=1d",
+        headers={"Accept": "application/json", "User-Agent": user_agent()},
+    )
+    with urllib.request.urlopen(request, timeout=30) as response:
+        result = json.loads(response.read().decode("utf-8"))
+    chart = (result.get("chart") or {}).get("result") or []
+    if not chart:
+        return []
+    quotes = ((chart[0].get("indicators") or {}).get("quote") or [])
+    closes = (quotes[0] if quotes else {}).get("close") or []
+    return [float(value) for value in closes if value is not None]
+
+
+def calculate_pearson(values_x, values_y):
+    pairs = [
+        (float(x), float(y))
+        for x, y in zip(values_x, values_y)
+        if x is not None and y is not None
+    ]
+    if len(pairs) < 3:
+        return None
+    xs = [pair[0] for pair in pairs]
+    ys = [pair[1] for pair in pairs]
+    mean_x = sum(xs) / len(xs)
+    mean_y = sum(ys) / len(ys)
+    numerator = sum((x - mean_x) * (y - mean_y) for x, y in pairs)
+    denominator_x = sum((x - mean_x) ** 2 for x in xs)
+    denominator_y = sum((y - mean_y) ** 2 for y in ys)
+    denominator = (denominator_x * denominator_y) ** 0.5
+    if denominator == 0:
+        return None
+    return numerator / denominator
+
+
+def calculate_daily_returns(closes):
+    return [
+        ((current - previous) / previous) * 100
+        for previous, current in zip(closes, closes[1:])
+        if previous not in (None, 0) and current is not None
+    ]
+
+
+def read_dxy_btc_pearson(temporalidad_days=30):
+    dxy_closes = read_yahoo_daily_closes("DX-Y.NYB", f"{temporalidad_days}d")
+    btc_closes = read_yahoo_daily_closes("BTC-USD", f"{temporalidad_days}d")
+    dxy_returns = calculate_daily_returns(dxy_closes)
+    btc_returns = calculate_daily_returns(btc_closes)
+    return calculate_pearson(dxy_returns, btc_returns)
+
+
 def read_yahoo_market_data():
     market = {}
     for label, symbol in YAHOO_MARKET_SYMBOLS.items():
@@ -449,11 +588,22 @@ def read_yahoo_market_data():
         change_percent = None
         if previous_close not in (None, 0):
             change_percent = ((close - previous_close) / previous_close) * 100
+        first_close = valid[0][1] if valid else None
+        week_change_percent = None
+        if first_close not in (None, 0):
+            week_change_percent = ((close - first_close) / first_close) * 100
+        intraday_1h = None
+        try:
+            intraday_1h = read_yahoo_intraday_change(symbol, periods=1)
+        except Exception as error:
+            print(f"Yahoo 1 h no disponible para {label}: {error}")
         market[label] = {
             "timestamp": timestamp,
             "close": close,
             "previous_close": previous_close,
             "change_percent": change_percent,
+            "week_change_percent": week_change_percent,
+            "intraday_1h": intraday_1h,
             "source": "Yahoo Finance chart",
             "symbol": symbol,
         }
@@ -472,13 +622,25 @@ def format_market_change(value):
     return f"{float(value):+,.2f}%".replace(",", "X").replace(".", ",").replace("X", ".")
 
 
+def format_change_with_direction(value):
+    if value is None:
+        return "N/D"
+    if value > 0.05:
+        marker = "⬆️"
+    elif value < -0.05:
+        marker = "⬇️"
+    else:
+        marker = "➡️"
+    return f"{format_market_change(value)} {marker}"
+
+
 def format_directional_change(value):
     if value is None:
         return "N/D"
     if value > 0.05:
-        marker = "📈"
+        marker = "⬆️"
     elif value < -0.05:
-        marker = "📉"
+        marker = "⬇️"
     else:
         marker = "➡️"
     return f"{marker} {format_market_change(value)}"
@@ -486,27 +648,211 @@ def format_directional_change(value):
 
 def market_direction(change_percent):
     if change_percent is None:
-        return "🟦►"
+        return "➡️"
     if change_percent > 0.05:
-        return "🟩▲"
+        return "⬆️"
     if change_percent < -0.05:
-        return "🟥▼"
-    return "🟦►"
+        return "⬇️"
+    return "➡️"
 
 
-def format_extended_market_context(sentiment, traditional_market):
-    lines = ["🌐 Contexto macro y sentimiento", ""]
-    lines.append("📈 Mercados tradicionales")
+def format_asset_comparison(market_data=None, traditional_market=None, temporalidad="24 h"):
+    rows = []
+    market_data = market_data or {}
+    traditional_market = traditional_market or {}
+    names = {"1": "BTC", "1027": "ETH", "5426": "SOL", "6535": "NEAR"}
+    quotes = market_data.get("quotes", {})
+    assets = [(asset.get("id", ""), asset) for asset in quotes] if isinstance(quotes, list) else list(quotes.items())
+    for asset_id, asset in assets:
+        quote = asset.get("quote", {}) if isinstance(asset, dict) else {}
+        if isinstance(quote, list):
+            quote = quote[0] if quote else {}
+        usd = quote.get("USD", {}) if isinstance(quote, dict) and "USD" in quote else quote
+        if isinstance(usd, list):
+            usd = usd[0] if usd else {}
+        if not isinstance(usd, dict):
+            continue
+        rows.append({
+            "label": names.get(str(asset_id), asset.get("symbol", "ACTIVO")),
+            "change": usd.get("percent_change_24h"),
+            "secondary": usd.get("percent_change_7d"),
+            "secondary_label": "7d",
+        })
+    for label, item in traditional_market.items():
+        rows.append({
+            "label": label,
+            "change": item.get("change_percent"),
+            "secondary": None,
+            "secondary_label": "",
+        })
+    rows = [row for row in rows if row.get("change") is not None]
+    rows.sort(key=lambda row: float(row["change"]), reverse=True)
+    lines = [f"📊 Desempeño relativo · temporalidad {temporalidad}", ""]
+    if not rows:
+        lines.append("No hay datos comparables disponibles.")
+        return "\n".join(lines)
+    for row in rows:
+        marker = "📈" if row["change"] > 0.05 else "📉" if row["change"] < -0.05 else "➡️"
+        secondary = (
+            f" · {row['secondary_label']}: {format_market_change(row['secondary'])}"
+            if row.get("secondary") is not None else ""
+        )
+        lines.append(
+            f"{marker} {row['label']}: 24h {format_market_change(row['change'])}{secondary}"
+        )
+    lines.extend([
+        "",
+        "🔎 Lectura relativa",
+        "Se ordenan los activos por variación observada. Las diferencias de dirección o magnitud se informan como divergencias.",
+        "La comparación no constituye pronóstico ni señal de operación.",
+    ])
+    return "\n".join(lines)
+
+
+def format_crypto_comparison(market_data=None, four_hour_changes=None):
+    market_data = market_data or {}
+    four_hour_changes = four_hour_changes or {}
+    names = {"1": "BTC", "1027": "ETH", "5426": "SOL", "6535": "NEAR"}
+    quotes = market_data.get("quotes", {})
+    assets = [(asset.get("id", ""), asset) for asset in quotes] if isinstance(quotes, list) else list(quotes.items())
+    rows = []
+    for asset_id, asset in assets:
+        quote = asset.get("quote", {}) if isinstance(asset, dict) else {}
+        if isinstance(quote, list):
+            quote = quote[0] if quote else {}
+        usd = quote.get("USD", {}) if isinstance(quote, dict) and "USD" in quote else quote
+        if isinstance(usd, list):
+            usd = usd[0] if usd else {}
+        if not isinstance(usd, dict):
+            continue
+        label = names.get(str(asset_id), asset.get("symbol", "ACTIVO"))
+        rows.append({
+            "label": label,
+            "change_1h": usd.get("percent_change_1h"),
+            "change_4h": four_hour_changes.get(label),
+            "change_24h": usd.get("percent_change_24h"),
+            "change_7d": usd.get("percent_change_7d"),
+        })
+    rows = [row for row in rows if row["change_24h"] is not None]
+    rows.sort(key=lambda row: float(row["change_24h"]), reverse=True)
+    lines = [
+        "<b>🪙 Desempeño relativo cripto · temporalidad 1 h · 4 h · 24 h · 7 d</b>",
+        "",
+    ]
+    if not rows:
+        lines.append("No hay datos comparables disponibles.")
+        return "\n".join(lines)
+    for row in rows:
+        four_hour_text = format_change_with_direction(row["change_4h"])
+        if row["change_4h"] is None:
+            four_hour_text += (
+                f" · referencia 1 h {format_market_change(row['change_1h'])}"
+            )
+        lines.append(
+            f"{row['label']}: "
+            f"1 h {format_change_with_direction(row['change_1h'])} · "
+            f"4 h {four_hour_text} · "
+            f"24 h {format_change_with_direction(row['change_24h'])} · "
+            f"7 d {format_change_with_direction(row['change_7d'])}"
+        )
+        lines.append("────────────────────")
+    best = rows[0]
+    worst = rows[-1]
+    lines.extend([
+        "",
+        f"Mejor desempeño observado: {best['label']} ({format_market_change(best['change_24h'])} en 24 h).",
+        f"Menor desempeño observado: {worst['label']} ({format_market_change(worst['change_24h'])} en 24 h).",
+        "Las diferencias se describen como desempeño relativo; no son señales de operación.",
+    ])
+    return "\n".join(lines)
+
+def format_traditional_comparison(traditional_market):
+    rows = [
+        (label, item.get("intraday_1h"), item.get("change_percent"))
+        for label, item in (traditional_market or {}).items()
+        if item.get("change_percent") is not None
+    ]
+    rows.sort(key=lambda row: float(row[2]), reverse=True)
+    lines = ["<b>📊 Comparación de mercados tradicionales · temporalidad 1 h · 24 h</b>", ""]
+    if not rows:
+        lines.append("No hay datos comparables disponibles.")
+        return "\n".join(lines)
+    for label, hourly, daily in rows:
+        lines.append(
+            f"{label}: 1 h {format_change_with_direction(hourly)} · "
+            f"24 h {format_change_with_direction(daily)}"
+        )
+        lines.append("────────────────────")
+    lines.extend([
+        "",
+        "La comparación ordena el desempeño observado y no constituye pronóstico.",
+    ])
+    return "\n".join(lines)
+
+def format_crypto_intermarket_context(pearson_value, traditional_market):
+    lines = ["<b>🔗 Cripto · dólar y activos de riesgo</b>", ""]
+    for label in ("DXY", "NQ100", "S&P 500", "VIX", "XAU", "OIL", "EUR/USD", "USD/JPY"):
+        item = (traditional_market or {}).get(label)
+        if item and item.get("change_percent") is not None:
+            lines.append(
+                f"{label}: 24 h {format_change_with_direction(item['change_percent'])}"
+            )
+    lines.append("")
+    lines.append(format_correlation(pearson_value, "30 días"))
+    lines.append(
+        "La lectura intermercado describe co-movimientos observados; "
+        "no atribuye causalidad."
+    )
+    return "\n".join(lines)
+
+
+def format_correlation(pearson_value, temporalidad):
+    if pearson_value is None:
+        return (
+            f"📐 Correlación DXY/BTC · temporalidad {temporalidad}: "
+            "N/D · series históricas alineadas insuficientes"
+        )
+    if pearson_value >= 0.7:
+        strength = "positiva fuerte"
+    elif pearson_value >= 0.3:
+        strength = "positiva moderada"
+    elif pearson_value > -0.3:
+        strength = "sin relación lineal clara"
+    elif pearson_value > -0.7:
+        strength = "inversa moderada"
+    else:
+        strength = "inversa fuerte"
+    return "\n".join([
+        f"📐 Correlación DXY/BTC · temporalidad {temporalidad}",
+        f"Resultado: {pearson_value:+.2f} · relación {strength}",
+        "Método: rendimientos diarios con fechas alineadas.",
+        "Alcance: relación estadística observada; no implica causalidad ni proyección.",
+    ])
+
+
+def format_extended_market_context(
+    sentiment,
+    traditional_market,
+    market_data=None,
+    pearson_value=None,
+):
+    lines = ["<b>📈 NOTIKRYPTOS · Informe técnico de mercados</b>", ""]
+    lines.append("<b>🌐 Mercados tradicionales y divisas</b>")
     for label, item in traditional_market.items():
         updated = datetime.fromtimestamp(item["timestamp"], tz=timezone.utc)
         change = item.get("change_percent")
-        direction = market_direction(change)
         lines.append(
-            f"{direction} {label}: {format_market_number(item.get('close'))} "
-            f"({format_market_change(change)}) · "
+            f"{label}: {format_market_number(item.get('close'))} · "
+            f"1 h: {format_change_with_direction(item.get('intraday_1h'))} · "
+            f"24 h: {format_change_with_direction(change)} · "
             f"{updated.strftime('%Y-%m-%d %H:%M UTC')}"
         )
+        lines.append("")
+        lines.append("────────────────────")
+        lines.append("")
     lines.append("Flecha: variación frente al dato anterior · Yahoo Finance chart")
+    lines.append("")
+    lines.append(format_traditional_comparison(traditional_market))
     lines.append("")
 
     fear_greed = sentiment.get("fear_greed") or {}
@@ -734,14 +1080,35 @@ def read_bls_official_snapshot(indicator):
     return snapshot
 
 
-def enrich_bls_macro_calendar(events):
-    """Completa el dato anterior con la última observación oficial disponible."""
+def macro_reference_period(event):
+    title = event.get("title", "")
+    match = re.search(
+        r"\b(January|February|March|April|May|June|July|August|September|"
+        r"October|November|December)\s+(20\d{2})\b",
+        title,
+        re.IGNORECASE,
+    )
+    if not match:
+        return None
+    month_numbers = {
+        name: index for index, name in enumerate(
+            ("January", "February", "March", "April", "May", "June",
+             "July", "August", "September", "October", "November", "December"),
+            start=1,
+        )
+    }
+    return int(match.group(2)), f"M{month_numbers[match.group(1).title()]:02d}"
+
+
+def enrich_bls_macro_calendar(events, now=None):
+    """Completa valores BLS sólo cuando el período oficial coincide."""
     indicator_snapshots = {}
     for indicator in ("CPI", "PPI", "Employment Situation"):
         try:
             indicator_snapshots[indicator] = read_bls_official_snapshot(indicator)
         except Exception as error:
             print(f"Datos BLS no disponibles para {indicator}: {error}")
+    now = now or datetime.now(timezone.utc)
     for event in events:
         title = event.get("title", "").lower()
         if "consumer price index" in title:
@@ -766,6 +1133,18 @@ def enrich_bls_macro_calendar(events):
             f"{actual.get('year')}-{actual.get('period')}"
             if actual.get("year") and actual.get("period") else None
         )
+        release = parse_macro_event_datetime(event)
+        reference_period = macro_reference_period(event)
+        if (
+            release is not None
+            and release <= now
+            and reference_period
+            and actual.get("year") == str(reference_period[0])
+            and actual.get("period") == reference_period[1]
+        ):
+            event["actual"] = actual.get("actual")
+            event["core_actual"] = core.get("actual")
+            event["status"] = "published · dato oficial disponible"
     return events
 
 
@@ -895,7 +1274,7 @@ def translate_macro_title(title):
 
 def format_macro_metric(event, value, field):
     if value in (None, ""):
-        return format_macro_value(value, "N/D" if field != "actual" else "pendiente")
+        return format_macro_value(value, "N/D" if field not in {"actual", "core_actual"} else "pendiente")
     title = event.get("title", "")
     if "Employment Situation" in title and field in {"previous", "actual"}:
         return f"{format_macro_value(value)} miles de empleos"
@@ -924,9 +1303,14 @@ def format_macro_event(event):
         f"Esperado: {format_macro_metric(event, event.get('expected'), 'expected')}",
         f"Real: {format_macro_metric(event, event.get('actual'), 'actual')}",
     ])
-    has_core = any(
-        event.get(field) not in (None, "")
-        for field in ("core_previous", "core_expected", "core_actual")
+    title_lower = event.get("title", "").lower()
+    has_core = (
+        any(
+            event.get(field) not in (None, "")
+            for field in ("core_previous", "core_expected", "core_actual")
+        )
+        or "cpi" in title_lower
+        or "consumer price index" in title_lower
     )
     if has_core:
         lines.extend([
@@ -934,7 +1318,7 @@ def format_macro_event(event):
             "Core",
             f"Anterior: {format_macro_metric(event, event.get('core_previous'), 'core_previous')}",
             f"Esperado: {format_macro_metric(event, event.get('core_expected'), 'core_expected')}",
-            f"Real: {format_macro_metric(event, event.get('core_actual'), 'core_actual')}",
+            f"Core real: {format_macro_metric(event, event.get('core_actual'), 'core_actual')}",
         ])
     lines.extend([
         "",
@@ -943,7 +1327,151 @@ def format_macro_event(event):
     ])
     return "\n".join(lines)
 
-def format_weekly_report(state, agenda, macro_agenda=None, bea_agenda=None):
+def parse_macro_event_datetime(event):
+    """Convierte la hora ET publicada por BLS/BEA a UTC."""
+    if event.get("release_time_utc"):
+        try:
+            return datetime.fromisoformat(
+                str(event["release_time_utc"]).replace("Z", "+00:00")
+            ).astimezone(timezone.utc)
+        except ValueError:
+            pass
+    value = str(event.get("date", ""))
+    match = re.search(
+        r"([A-Za-z]+)\s+(\d{1,2}),\s+(\d{4})\s+·\s+"
+        r"(\d{1,2}):(\d{2})\s+([AP]M)\s+ET",
+        value,
+        re.IGNORECASE,
+    )
+    if not match:
+        return None
+    month_name, day, year, hour, minute, meridiem = match.groups()
+    month_numbers = {
+        name: index for index, name in enumerate(
+            ("January", "February", "March", "April", "May", "June",
+             "July", "August", "September", "October", "November", "December"),
+            start=1,
+        )
+    }
+    month = month_numbers.get(month_name.title())
+    if month is None:
+        return None
+    hour = int(hour) % 12 + (12 if meridiem.upper() == "PM" else 0)
+    return datetime(
+        int(year), month, int(day), hour, int(minute),
+        tzinfo=ZoneInfo("America/New_York"),
+    ).astimezone(timezone.utc)
+
+
+def macro_event_id(event):
+    return "|".join([
+        event.get("source", "macro"),
+        event.get("start_date", ""),
+        event.get("title", ""),
+    ])
+
+
+def macro_alert_window(event, now=None):
+    now = now or datetime.now(timezone.utc)
+    release = parse_macro_event_datetime(event)
+    if release is None:
+        return None
+    minutes_until_release = (release - now).total_seconds() / 60
+    if abs(minutes_until_release - MACRO_PRE_RELEASE_MINUTES) <= MACRO_ALERT_TOLERANCE_MINUTES:
+        return "pre_release"
+    if -MACRO_PUBLICATION_LOOKBACK_MINUTES <= minutes_until_release <= 0:
+        return "publication"
+    return None
+
+
+def format_macro_alert(event, phase):
+    source = event.get("source", "fuente oficial")
+    source_name = "BLS" if "Labor" in source else "BEA/Fed"
+    if phase == "pre_release":
+        heading = "⏰ NOTIKRYPTOS · AVISO MACRO · 1 HORA ANTES"
+        status = "🟡 PROGRAMADO · Esperado no oficial"
+    else:
+        heading = "📣 NOTIKRYPTOS · DATO MACRO PUBLICADO"
+        status = "✅ PUBLICADO · Real con fuente oficial"
+    lines = [
+        heading,
+        "",
+        f"🗓️ {translate_macro_title(event.get('title', 'Evento macroeconómico'))}",
+        f"📅 {translate_macro_date(event.get('date', 'Fecha no disponible'))}",
+        "",
+        f"Anterior: {format_macro_metric(event, event.get('previous'), 'previous')}",
+        f"Esperado: {format_macro_metric(event, event.get('expected'), 'expected')}"
+        + (
+            f" · {event['expected_source']}"
+            if event.get("expected_source") else ""
+        ),
+    ]
+    if phase == "publication":
+        lines.append(
+            f"Real: {format_macro_metric(event, event.get('actual'), 'actual')}"
+        )
+    else:
+        lines.append("Real: pendiente de publicación oficial")
+    lines.extend([
+        "",
+        status,
+        f"Fuente: {source_name} · {source}",
+        f"🔗 {event.get('link', 'Enlace no disponible')}",
+    ])
+    return "\n".join(lines)
+
+
+def run_macro_alerts(state):
+    """Publica un aviso una hora antes y otro cuando el dato ya está disponible."""
+    now = datetime.now(timezone.utc)
+    events = []
+    external_events = []
+    try:
+        external_events = read_showmytrades_macro_calendar()
+    except Exception as error:
+        print(f"Consenso macro no oficial no disponible: {error}")
+    try:
+        events.extend(enrich_bls_macro_calendar(read_bls_macro_calendar(), now=now))
+    except Exception as error:
+        print(f"Agenda BLS no disponible para alertas: {error}")
+    try:
+        events.extend(read_fomc_agenda())
+    except Exception as error:
+        print(f"Agenda FOMC no disponible para alertas: {error}")
+    try:
+        events.extend(read_bea_macro_calendar())
+    except Exception as error:
+        print(f"Agenda BEA no disponible para alertas: {error}")
+    if external_events:
+        events = apply_external_macro_data(events, external_events)
+
+    sent = state.setdefault("macro_alerts_sent", {})
+    published = 0
+    for event in events:
+        phase = macro_alert_window(event, now)
+        if phase is None:
+            continue
+        if phase == "publication" and event.get("actual") in (None, ""):
+            print(f"Dato oficial todavía no verificable: {event.get('title')}")
+            continue
+        key = f"{macro_event_id(event)}|{phase}"
+        if key in sent:
+            continue
+        delivery = send_message(format_macro_alert(event, phase))
+        sent[key] = {
+            "phase": phase,
+            "telegram_message_id": delivery.get("message_id"),
+            "telegram_chat_id": delivery.get("chat_id"),
+            "telegram_date": delivery.get("date"),
+            "recorded_at": now.isoformat(),
+        }
+        published += 1
+    if published:
+        save_state(state)
+    print(f"Alertas macro: {published} aviso(s) publicado(s).")
+
+
+def format_weekly_report(state, agenda, macro_agenda=None, bea_agenda=None, market_data=None, traditional_market=None, pearson_value=None):
     now = datetime.now(timezone.utc)
     cutoff = now - timedelta(days=7)
     recent = []
@@ -985,6 +1513,18 @@ def format_weekly_report(state, agenda, macro_agenda=None, bea_agenda=None):
     else:
         lines.append("No se pudo consultar el calendario BEA en esta ejecución.")
     lines.append("")
+    lines.append("📈 RESUMEN TÉCNICO SEMANAL · MERCADOS TRADICIONALES")
+    lines.append("────────────────────")
+    lines.append(format_traditional_comparison(traditional_market or {}))
+    lines.append("")
+    lines.append("🪙 RESUMEN TÉCNICO SEMANAL · CRIPTO")
+    lines.append("────────────────────")
+    lines.append(format_crypto_comparison(market_data or {}))
+    lines.append("")
+    lines.append(format_crypto_intermarket_context(
+        pearson_value, traditional_market or {}
+    ))
+    lines.append("")
     lines.append("⚖️ Alcance")
     lines.append("Resumen informativo basado en publicaciones registradas y calendario oficial.")
     lines.append(f"🔗 Fuente del calendario: {FOMC_CALENDAR_URL}")
@@ -1024,6 +1564,72 @@ def read_bls_news():
         })
         print(f"{source_name}: comunicado encontrado.")
     print(f"BLS: {len(news)} comunicados encontrados.")
+    return news
+
+
+def read_fundamental_rss_feed(source_name, feed_url, keywords):
+    request = urllib.request.Request(feed_url, headers=rss_headers())
+    with urllib.request.urlopen(request, timeout=30) as response:
+        root = ET.fromstring(response.read())
+    candidates = []
+    for element in root.iter():
+        if element.tag.split("}")[-1] not in {"item", "entry"}:
+            continue
+        values = {}
+        link = ""
+        for child in element:
+            name = child.tag.split("}")[-1]
+            if name in {
+                "title", "pubDate", "published", "updated", "date",
+                "description", "summary", "content",
+            }:
+                values.setdefault(name, (child.text or "").strip())
+            if name == "link":
+                link = (
+                    child.attrib.get("href", "")
+                    or child.text
+                    or ""
+                ).strip()
+        title = values.get("title") or "Sin título"
+        details = (
+            values.get("description")
+            or values.get("summary")
+            or values.get("content")
+            or ""
+        )
+        text = f"{title} {details}".lower()
+        if not any(keyword in text for keyword in keywords):
+            continue
+        published = next(
+            (
+                values.get(key)
+                for key in ("pubDate", "published", "updated", "date")
+                if values.get(key)
+            ),
+            "",
+        )
+        canonical_link = link or feed_url
+        candidates.append({
+            "id": f"fundamental:{source_name}:{canonical_link or title}",
+            "source": source_name,
+            "title": title,
+            "link": canonical_link,
+            "published": published,
+            "details": details,
+        })
+    print(f"{source_name}: {len(candidates)} publicaciones fundamentales detectadas.")
+    return candidates
+
+
+def read_fundamental_news():
+    news = []
+    for source_name, feed_url, keywords in FUNDAMENTAL_RSS_FEEDS:
+        try:
+            news.extend(read_fundamental_rss_feed(source_name, feed_url, keywords))
+        except urllib.error.HTTPError as error:
+            print(f"{source_name} no disponible temporalmente: HTTP {error.code}")
+        except Exception as error:
+            print(f"Error consultando {source_name}: {error}")
     return news
 
 
@@ -1079,6 +1685,7 @@ def collect_news():
         ("Binance", read_binance_news),
         ("BLS", read_bls_news),
         ("Tecnología e IA", read_official_tech_news),
+        ("Fuentes fundamentales", read_fundamental_news),
     ]
     for label, reader in sources:
         try:
@@ -1219,7 +1826,7 @@ def split_telegram_message(text, max_length=3900):
     return chunks
 
 
-def send_message(text):
+def send_message(text, parse_mode=None):
     token = os.environ["TELEGRAM_BOT_TOKEN"]
     deliveries = []
     for chunk in split_telegram_message(text):
@@ -1229,6 +1836,8 @@ def send_message(text):
             "text": chunk,
             "disable_web_page_preview": False,
         }
+        if parse_mode:
+            payload["parse_mode"] = parse_mode
         request = urllib.request.Request(
             f"https://api.telegram.org/bot{token}/sendMessage",
             data=json.dumps(payload).encode("utf-8"),
@@ -1315,46 +1924,76 @@ def main():
     run_mode = os.environ.get("RUN_MODE", RUN_MODE).strip().lower()
 
     market_snapshot = ""
-    try:
-        market_data = read_coinmarketcap_market()
-        four_hour_changes = read_binance_four_hour_changes()
-        market_snapshot = format_coinmarketcap_snapshot(market_data, four_hour_changes)
-        print(market_snapshot)
-    except urllib.error.HTTPError as error:
-        body = error.read().decode("utf-8", errors="replace")
-        print(f"CoinMarketCap no disponible: HTTP {error.code} — {body}")
-    except Exception as error:
-        print(f"Error consultando CoinMarketCap: {error}")
-
+    market_data = {}
+    four_hour_changes = {}
+    pearson_value = None
     sentiment = {}
-    try:
-        sentiment = read_cmc_sentiment()
-    except Exception as error:
-        print(f"CoinMarketCap: sentimiento no disponible: {error}")
-        try:
-            sentiment["fear_greed"] = read_alternative_me_fear_greed()
-            print("Fear & Greed: datos recibidos desde Alternative.me.")
-        except Exception as fallback_error:
-            print(f"Fear & Greed: fallback no disponible: {fallback_error}")
-
     traditional_market = {}
-    try:
-        traditional_market = read_yahoo_market_data()
-    except Exception as error:
-        print(f"Mercados tradicionales no disponibles: {error}")
+
+    # Los datos de mercado pertenecen a los informes diario y semanal.
+    # Las alertas de noticias no deben ejecutar ni mostrar este bloque.
+    if run_mode in {"daily", "weekly"}:
+        try:
+            market_data = read_coinmarketcap_market()
+            four_hour_changes = read_binance_four_hour_changes()
+            market_snapshot = format_coinmarketcap_snapshot(
+                market_data, four_hour_changes
+            )
+            print(market_snapshot)
+        except urllib.error.HTTPError as error:
+            body = error.read().decode("utf-8", errors="replace")
+            print(f"CoinMarketCap no disponible: HTTP {error.code} — {body}")
+        except Exception as error:
+            print(f"Error consultando CoinMarketCap: {error}")
+
+        try:
+            sentiment = read_cmc_sentiment()
+        except Exception as error:
+            print(f"CoinMarketCap: sentimiento no disponible: {error}")
+            try:
+                sentiment["fear_greed"] = read_alternative_me_fear_greed()
+                print("Fear & Greed: datos recibidos desde Alternative.me.")
+            except Exception as fallback_error:
+                print(f"Fear & Greed: fallback no disponible: {fallback_error}")
+
+        try:
+            pearson_value = read_dxy_btc_pearson(30)
+        except Exception as error:
+            print(f"Correlación DXY/BTC no disponible: {error}")
+        try:
+            traditional_market = read_yahoo_market_data()
+        except Exception as error:
+            print(f"Mercados tradicionales no disponibles: {error}")
 
     if run_mode == "daily":
-        daily_sections = [section for section in (
-            market_snapshot,
-            format_extended_market_context(sentiment, traditional_market)
-            if sentiment or traditional_market else "",
-        ) if section]
-        if daily_sections:
-            delivery = send_message("\n\n".join(daily_sections))
-            print(
-                "Resumen diario de mercado enviado a Telegram. "
-                f"message_id={delivery.get('message_id')}"
+        if market_snapshot:
+            crypto_sections = [
+                market_snapshot,
+                format_crypto_comparison(market_data, four_hour_changes),
+                format_crypto_intermarket_context(pearson_value, traditional_market),
+            ]
+            crypto_delivery = send_message(
+                "\n\n".join(crypto_sections), parse_mode="HTML"
             )
+            print(
+                "Informe técnico cripto enviado a Telegram. "
+                f"message_id={crypto_delivery.get('message_id')}"
+            )
+        if sentiment or traditional_market:
+            traditional_delivery = send_message(
+                format_extended_market_context(
+                    sentiment, traditional_market, market_data, pearson_value
+                ),
+                parse_mode="HTML",
+            )
+            print(
+                "Informe técnico de mercados enviado a Telegram. "
+                f"message_id={traditional_delivery.get('message_id')}"
+            )
+
+    if run_mode == "macro_alerts":
+        run_macro_alerts(state)
+        return
 
     if run_mode == "weekly":
         try:
@@ -1372,7 +2011,10 @@ def main():
                 print(f"Calendario BEA: {len(bea_agenda)} eventos futuros recibidos.")
             except Exception as error:
                 print(f"Calendario BEA no disponible: {error}")
-            weekly_report = format_weekly_report(state, agenda, macro_agenda, bea_agenda)
+            weekly_report = format_weekly_report(
+                state, agenda, macro_agenda, bea_agenda,
+                market_data, traditional_market, pearson_value,
+            )
             try:
                 official_snapshot = format_official_macro_snapshot()
                 if official_snapshot:
