@@ -2,6 +2,12 @@ name: NotiKryptos - Alertas
 
 on:
   workflow_dispatch:
+    inputs:
+      lookback_hours:
+        description: "Horas hacia atrás para la prueba manual (48 normal, 168 una semana)"
+        required: false
+        default: "48"
+        type: string
   schedule:
     - cron: "*/15 * * * *"
 
@@ -28,6 +34,7 @@ jobs:
       - name: Ejecutar alertas
         env:
           RUN_MODE: alerts
+          MAX_NEWS_AGE_HOURS: ${{ inputs.lookback_hours || '48' }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           TELEGRAM_TOPIC_ID: ${{ secrets.TELEGRAM_TOPIC_ID }}

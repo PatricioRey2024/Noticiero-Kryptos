@@ -78,6 +78,26 @@ FUNDAMENTAL_RSS_FEEDS = [
     ),
 ]
 
+
+FUNDAMENTAL_HTML_SOURCES = [
+    (
+        "OFAC - Comunicados",
+        "https://ofac.treasury.gov/press-releases",
+        (
+            "sanctions designation designated iran russia cuba terrorism "
+            "gold oil maritime energy"
+        ).split(),
+    ),
+    (
+        "LBMA - Noticias oro",
+        "https://www.lbma.org.uk/newsroom",
+        (
+            "gold bullion precious metals reserve sanctions geopolitics "
+            "market integrity"
+        ).split(),
+    ),
+]
+
 YAHOO_MARKET_SYMBOLS = {
     "DXY": "DX-Y.NYB",
     "XAU": "GC=F",
@@ -106,7 +126,7 @@ BINANCE_KEYWORDS = (
 STATE_FILE = "state.json"
 GEMINI_MODEL = "gemini-3.5-flash-lite"
 MAX_PROCESSED_IDS = 200
-MAX_NEWS_AGE_HOURS = 48
+MAX_NEWS_AGE_HOURS = int(os.environ.get("MAX_NEWS_AGE_HOURS", "48"))
 TELEGRAM_MAX_ATTEMPTS = 3
 TELEGRAM_RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
 RUN_MODE = os.environ.get("RUN_MODE", "manual").strip().lower()
@@ -172,7 +192,8 @@ def format_published_date(value):
 def rss_headers():
     return {
         "User-Agent": user_agent(),
-        "Accept": "application/rss+xml, application/xml",
+        "Accept": "application/rss+xml, application/xml, text/xml, text/html;q=0.9, */*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.8",
     }
 
 
@@ -1289,19 +1310,16 @@ def format_macro_metric(event, value, field):
 
 def format_macro_event(event):
     source = event.get("source", "fuente no disponible")
-    is_bea = "Economic Analysis" in source
-    section = "🏛️ BEA · ACTIVIDAD ECONÓMICA" if is_bea else "📈 BLS · INDICADORES MACRO"
+    is_bea = "Economic Analysis" in source or "Economic Analysis" in str(event.get("source", ""))
     title = translate_macro_title(event.get("title", "Evento macroeconómico"))
-    lines = [
-        f"🗓️ {title}",
-    ]
+    lines = ["🗓️ " + title]
     if event.get("date"):
         lines.append(f"📅 {translate_macro_date(event['date'])}")
     lines.extend([
         "",
         f"Anterior: {format_macro_metric(event, event.get('previous'), 'previous')}",
-        f"Esperado: {format_macro_metric(event, event.get('expected'), 'expected')}",
-        f"Real: {format_macro_metric(event, event.get('actual'), 'actual')}",
+        f"Esperado no oficial: {format_macro_metric(event, event.get('expected'), 'expected')}",
+        f"Real oficial: {format_macro_metric(event, event.get('actual'), 'actual')}",
     ])
     title_lower = event.get("title", "").lower()
     has_core = (
@@ -1317,15 +1335,32 @@ def format_macro_event(event):
             "",
             "Core",
             f"Anterior: {format_macro_metric(event, event.get('core_previous'), 'core_previous')}",
-            f"Esperado: {format_macro_metric(event, event.get('core_expected'), 'core_expected')}",
-            f"Core real: {format_macro_metric(event, event.get('core_actual'), 'core_actual')}",
+            f"Esperado no oficial: {format_macro_metric(event, event.get('core_expected'), 'core_expected')}",
+            f"Core real oficial: {format_macro_metric(event, event.get('core_actual'), 'core_actual')}",
         ])
+    status = str(event.get("status", "scheduled"))
+    if "published" in status:
+        status_text = "✅ PUBLICADO · resultado oficial disponible"
+    else:
+        status_text = "🟡 PROGRAMADO · informe de referencia"
+    source_label = (
+        "Oficina de Análisis Económico de EE. UU. (BEA)"
+        if is_bea
+        else "Oficina de Estadísticas Laborales de EE. UU. (BLS)"
+        if "Labor" in source or "Statistics" in source
+        else source
+    )
     lines.extend([
         "",
-        "Estado: 🟡 PROGRAMADO",
-        f"Fuente: {'Oficina de Estadísticas Laborales de EE. UU. (BLS)' if not is_bea else 'Oficina de Análisis Económico de EE. UU. (BEA)'}",
+        f"Estado: {status_text}",
+        f"Fuente oficial: {source_label}",
     ])
+    if event.get("expected_source"):
+        lines.append(f"Fuente del esperado: {event['expected_source']} · no oficial")
+    if event.get("link"):
+        lines.append(f"🔗 {event['link']}")
     return "\n".join(lines)
+
 
 def parse_macro_event_datetime(event):
     """Convierte la hora ET publicada por BLS/BEA a UTC."""
@@ -1388,11 +1423,11 @@ def format_macro_alert(event, phase):
     source = event.get("source", "fuente oficial")
     source_name = "BLS" if "Labor" in source else "BEA/Fed"
     if phase == "pre_release":
-        heading = "⏰ NOTIKRYPTOS · AVISO MACRO · 1 HORA ANTES"
-        status = "🟡 PROGRAMADO · Esperado no oficial"
+        heading = "⏰ NOTIKRYPTOS · RECORDATORIO MACROECONÓMICO · 1 HORA ANTES"
+        status = "🟡 RECORDATORIO DE AGENDA · esperado no oficial"
     else:
-        heading = "📣 NOTIKRYPTOS · DATO MACRO PUBLICADO"
-        status = "✅ PUBLICADO · Real con fuente oficial"
+        heading = "📣 NOTIKRYPTOS · INFORME MACROECONÓMICO · DATO OFICIAL PUBLICADO"
+        status = "✅ INFORME ACTUALIZADO · resultado oficial con fuente oficial"
     lines = [
         heading,
         "",
@@ -1400,7 +1435,7 @@ def format_macro_alert(event, phase):
         f"📅 {translate_macro_date(event.get('date', 'Fecha no disponible'))}",
         "",
         f"Anterior: {format_macro_metric(event, event.get('previous'), 'previous')}",
-        f"Esperado: {format_macro_metric(event, event.get('expected'), 'expected')}"
+        f"Esperado no oficial: {format_macro_metric(event, event.get('expected'), 'expected')}"
         + (
             f" · {event['expected_source']}"
             if event.get("expected_source") else ""
@@ -1408,10 +1443,10 @@ def format_macro_alert(event, phase):
     ]
     if phase == "publication":
         lines.append(
-            f"Real: {format_macro_metric(event, event.get('actual'), 'actual')}"
+            f"Real oficial: {format_macro_metric(event, event.get('actual'), 'actual')}"
         )
     else:
-        lines.append("Real: pendiente de publicación oficial")
+        lines.append("Real oficial: pendiente de publicación oficial")
     lines.extend([
         "",
         status,
@@ -1422,7 +1457,7 @@ def format_macro_alert(event, phase):
 
 
 def run_macro_alerts(state):
-    """Publica un aviso una hora antes y otro cuando el dato ya está disponible."""
+    """Publica un recordatorio de agenda y luego el informe con el resultado oficial."""
     now = datetime.now(timezone.utc)
     events = []
     external_events = []
@@ -1468,7 +1503,107 @@ def run_macro_alerts(state):
         published += 1
     if published:
         save_state(state)
-    print(f"Alertas macro: {published} aviso(s) publicado(s).")
+    print(f"Informe macroeconómico programado: {published} entrega(s) publicada(s).")
+
+
+def collect_macro_agenda():
+    """Obtiene agenda macro oficial y completa valores disponibles."""
+    now = datetime.now(timezone.utc)
+    events = []
+    try:
+        events.extend(enrich_bls_macro_calendar(read_bls_macro_calendar(), now=now))
+    except Exception as error:
+        print(f"Calendario BLS no disponible para informes: {error}")
+    try:
+        events.extend(read_bea_macro_calendar())
+    except Exception as error:
+        print(f"Calendario BEA no disponible para informes: {error}")
+    try:
+        events.extend(read_fomc_agenda())
+    except Exception as error:
+        print(f"Calendario FOMC no disponible para informes: {error}")
+    try:
+        external_events = read_showmytrades_macro_calendar()
+        if external_events:
+            events = apply_external_macro_data(events, external_events)
+    except Exception as error:
+        print(f"Consenso no oficial no disponible para informes: {error}")
+    unique = {}
+    for event in events:
+        key = macro_event_id(event)
+        unique[key] = event
+    return sorted(
+        unique.values(),
+        key=lambda event: (event.get("start_date", ""), event.get("title", "")),
+    )
+
+
+def filter_next_week_events(events):
+    """Limita la agenda del informe semanal a los próximos siete días."""
+    argentina_today = datetime.now(
+        ZoneInfo("America/Argentina/Buenos_Aires")
+    ).date()
+    end_date = argentina_today + timedelta(days=7)
+    filtered = []
+    for event in events:
+        try:
+            event_date = datetime.fromisoformat(
+                str(event.get("start_date", ""))
+            ).date()
+        except ValueError:
+            continue
+        if argentina_today <= event_date < end_date:
+            filtered.append(event)
+    return sorted(
+        filtered,
+        key=lambda event: (event.get("start_date", ""), event.get("title", "")),
+    )
+
+
+def format_daily_macro_report(events):
+    """Informe normal de datos de hoy y agenda de mañana, sin alertas."""
+    argentina_today = datetime.now(
+        ZoneInfo("America/Argentina/Buenos_Aires")
+    ).date()
+    tomorrow = argentina_today + timedelta(days=1)
+    selected = []
+    for event in events:
+        try:
+            event_date = datetime.fromisoformat(
+                str(event.get("start_date", ""))
+            ).date()
+        except ValueError:
+            continue
+        if event_date in {argentina_today, tomorrow}:
+            selected.append(event)
+    if not selected:
+        return ""
+    today_events = [
+        event for event in selected
+        if event.get("start_date") == argentina_today.isoformat()
+    ]
+    tomorrow_events = [
+        event for event in selected
+        if event.get("start_date") == tomorrow.isoformat()
+    ]
+    lines = [
+        "<b>📊 NOTIKRYPTOS · Informe macroeconómico diario</b>",
+        "",
+        "Informe de agenda y resultados macroeconómicos de Estados Unidos.",
+    ]
+    for label, group in (("HOY", today_events), ("MAÑANA", tomorrow_events)):
+        if not group:
+            continue
+        lines.extend(["", f"<b>🇺🇸 {label}</b>", ""])
+        for event in group:
+            lines.append(format_macro_event(event))
+            lines.append("")
+            lines.append("────────────────────")
+    lines.extend([
+        "",
+        "El esperado se identifica como no oficial. El real se muestra únicamente cuando existe confirmación oficial.",
+    ])
+    return "\n".join(lines)
 
 
 def format_weekly_report(state, agenda, macro_agenda=None, bea_agenda=None, market_data=None, traditional_market=None, pearson_value=None):
@@ -1621,11 +1756,74 @@ def read_fundamental_rss_feed(source_name, feed_url, keywords):
     return candidates
 
 
+
+
+def read_fundamental_html_page(source_name, page_url, keywords):
+    """Lee titulares de una página oficial cuando no existe RSS público estable."""
+    request = urllib.request.Request(page_url, headers=rss_headers())
+    with urllib.request.urlopen(request, timeout=30) as response:
+        html = response.read().decode("utf-8", errors="replace")
+    candidates = []
+    seen_links = set()
+    seen_titles = set()
+    allowed_hosts = {
+        "OFAC - Comunicados": {"ofac.treasury.gov"},
+        "LBMA - Noticias oro": {"www.lbma.org.uk", "lbma.org.uk"},
+    }.get(source_name)
+    anchor_pattern = re.compile(
+        r"""<a\b[^>]*?href=["']([^"']+)["'][^>]*>(.*?)</a>""",
+        re.IGNORECASE | re.DOTALL,
+    )
+    for href, raw_title in anchor_pattern.findall(html):
+        title = re.sub(r"<[^>]+>", " ", raw_title)
+        title = re.sub(r"\s+", " ", unescape(title)).strip()
+        if len(title) < 24:
+            continue
+        text = title.lower()
+        if not any(keyword in text for keyword in keywords):
+            continue
+        link = urllib.parse.urljoin(page_url, unescape(href).strip())
+        link_host = urllib.parse.urlparse(link).netloc.lower()
+        if allowed_hosts and link_host not in allowed_hosts:
+            continue
+        title_key = re.sub(r"\\W+", " ", title.lower()).strip()
+        if link in seen_links or title_key in seen_titles or link == page_url:
+            continue
+        anchor_position = html.find(href)
+        context = html[max(0, anchor_position - 1200):anchor_position + 1200]
+        date_match = re.search(
+            r"(20\d{2}[-/]\d{2}[-/]\d{2}|"
+            r"\d{1,2}\s+(?:January|February|March|April|May|June|July|August|"
+            r"September|October|November|December)\s+20\d{2})",
+            unescape(context),
+            re.IGNORECASE,
+        )
+        published = date_match.group(1) if date_match else ""
+        seen_links.add(link)
+        seen_titles.add(title_key)
+        candidates.append({
+            "id": f"fundamental:{source_name}:{link}",
+            "source": source_name,
+            "title": title,
+            "link": link,
+            "published": published,
+            "details": "",
+        })
+    print(f"{source_name}: {len(candidates)} publicaciones fundamentales detectadas.")
+    return candidates
+
 def read_fundamental_news():
     news = []
     for source_name, feed_url, keywords in FUNDAMENTAL_RSS_FEEDS:
         try:
             news.extend(read_fundamental_rss_feed(source_name, feed_url, keywords))
+        except urllib.error.HTTPError as error:
+            print(f"{source_name} no disponible temporalmente: HTTP {error.code}")
+        except Exception as error:
+            print(f"Error consultando {source_name}: {error}")
+    for source_name, page_url, keywords in FUNDAMENTAL_HTML_SOURCES:
+        try:
+            news.extend(read_fundamental_html_page(source_name, page_url, keywords))
         except urllib.error.HTTPError as error:
             print(f"{source_name} no disponible temporalmente: HTTP {error.code}")
         except Exception as error:
@@ -1746,8 +1944,10 @@ Enlace: {news['link']}
 Devolvé únicamente JSON válido con relevance (ALTA, MEDIA, BAJA o DESCARTAR),
 title_es, summary_es e impact_es. Escribí en español formal y natural.
 Usá el concepto 'Impacto potencial en el mercado'. No inventes datos.
-ALTA: hackeo, retiros suspendidos, crisis de liquidez, sanción relevante,
-decisión fuerte de tasas o riesgo financiero amplio.
+ALTA: guerra, conflicto armado, escalada militar, ataque relevante, alto el fuego,
+negociación de paz, sanción relevante, interrupción del suministro de petróleo,
+OPEC, energía crítica, infraestructura energética atacada, crisis de liquidez,
+hackeo sistémico, retiros suspendidos, decisión fuerte de tasas o riesgo financiero amplio.
 MEDIA: incidente operativo relevante, regulación sectorial o hecho que merezca seguimiento.
 BAJA: mantenimiento menor o comunicado administrativo puntual.
 DESCARTAR: promoción, listado, airdrop o información sin impacto identificable.
@@ -1966,6 +2166,11 @@ def main():
             print(f"Mercados tradicionales no disponibles: {error}")
 
     if run_mode == "daily":
+        daily_macro_report = ""
+        try:
+            daily_macro_report = format_daily_macro_report(collect_macro_agenda())
+        except Exception as error:
+            print(f"Informe macroeconómico diario no disponible: {error}")
         if market_snapshot:
             crypto_sections = [
                 market_snapshot,
@@ -1990,6 +2195,12 @@ def main():
                 "Informe técnico de mercados enviado a Telegram. "
                 f"message_id={traditional_delivery.get('message_id')}"
             )
+        if daily_macro_report:
+            macro_delivery = send_message(daily_macro_report, parse_mode="HTML")
+            print(
+                "Informe macroeconómico diario enviado a Telegram. "
+                f"message_id={macro_delivery.get('message_id')}"
+            )
 
     if run_mode == "macro_alerts":
         run_macro_alerts(state)
@@ -1997,20 +2208,20 @@ def main():
 
     if run_mode == "weekly":
         try:
-            agenda = read_fomc_agenda()
-            macro_agenda = []
-            try:
-                macro_agenda = read_bls_macro_calendar()
-                macro_agenda = enrich_bls_macro_calendar(macro_agenda)
-                print(f"Calendario BLS: {len(macro_agenda)} eventos futuros recibidos.")
-            except Exception as error:
-                print(f"Calendario BLS no disponible: {error}")
-            bea_agenda = []
-            try:
-                bea_agenda = read_bea_macro_calendar()
-                print(f"Calendario BEA: {len(bea_agenda)} eventos futuros recibidos.")
-            except Exception as error:
-                print(f"Calendario BEA no disponible: {error}")
+            all_macro_events = collect_macro_agenda()
+            agenda = filter_next_week_events(
+                [event for event in all_macro_events if event.get("source") == "Federal Reserve"]
+            )
+            macro_agenda = filter_next_week_events(
+                [event for event in all_macro_events if "Labor" in event.get("source", "")]
+            )
+            bea_agenda = filter_next_week_events(
+                [event for event in all_macro_events if "Economic Analysis" in event.get("source", "")]
+            )
+            print(
+                f"Agenda macroeconómica semanal: {len(all_macro_events)} eventos "
+                f"en la próxima semana."
+            )
             weekly_report = format_weekly_report(
                 state, agenda, macro_agenda, bea_agenda,
                 market_data, traditional_market, pearson_value,
@@ -2100,7 +2311,11 @@ def main():
         }
         save_state(state)
         processed_any = True
-        print(f"{news['source']}: noticia publicada. Nivel de relevancia: {relevance}.")
+        print(
+            f"{news["source"]}: noticia publicada. Nivel de relevancia: {relevance}. "
+            f"Título: {news["title"]} · message_id={delivery.get("message_id")} · "
+            f"enlace: {news.get("link", "N/D")}"
+        )
     if not processed_any:
         print("No hay noticias nuevas para procesar.")
 
