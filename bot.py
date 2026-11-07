@@ -1778,7 +1778,7 @@ def read_fundamental_html_page(source_name, page_url, keywords):
     )
     for href, raw_title in anchor_pattern.findall(html):
         title = re.sub(r"<[^>]+>", " ", raw_title)
-        title = re.sub(r"\\s+", " ", unescape(title)).strip()
+        title = re.sub(r"\s+", " ", unescape(title)).strip()
         if len(title) < 24:
             continue
         text = title.lower()
