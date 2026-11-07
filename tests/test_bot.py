@@ -132,6 +132,38 @@ class BotStateTests(unittest.TestCase):
         self.assertNotIn("ALERTA", report)
         self.assertNotIn("1 HORA ANTES", report)
 
+    def test_fundamental_html_page_filters_and_resolves_official_links(self):
+        html = b"""
+        <html><body>
+          <a href="/pr-detail/oil.html">OPEC announces oil production adjustment</a>
+          <a href="/about">About the organization</a>
+        </body></html>
+        """
+
+        class FakeResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return None
+
+            def read(self):
+                return html
+
+        with patch.object(bot.urllib.request, "urlopen", return_value=FakeResponse()):
+            news = bot.read_fundamental_html_page(
+                "OPEC - Comunicados",
+                "https://www.opec.org/press-releases.html",
+                ["oil", "production"],
+            )
+
+        self.assertEqual(len(news), 1)
+        self.assertEqual(news[0]["source"], "OPEC - Comunicados")
+        self.assertEqual(
+            news[0]["link"],
+            "https://www.opec.org/pr-detail/oil.html",
+        )
+
     def test_fundamental_feed_filters_and_preserves_original_link(self):
         xml = b"""<?xml version="1.0" encoding="UTF-8"?>
         <rss><channel>
