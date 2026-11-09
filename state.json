@@ -33,7 +33,9 @@
     "binance:https://www.binance.com/en/support/announcement/a2dd10b860a14c35a856fe9d66d6032c|recovery update 9 withdrawals for more assets to reopen 2026 11 06",
     "bls:https://www.bls.gov/news.release/archives/empsit_11062026.htm",
     "tech:OpenAI News:https://openai.com/index/australian-universities-ai-native-graduates",
-    "tech:OpenAI News:https://openai.com/index/partnering-with-hacktron"
+    "tech:OpenAI News:https://openai.com/index/partnering-with-hacktron",
+    "coinbase:0tlgts8cn5y8:mkk3dsfj7cq9",
+    "tech:OpenAI News:https://openai.com/index/chatgpt-enterprise-aws-marketplace"
   ],
   "published_messages": {
     "binance:https://www.binance.com/en/support/announcement/2d83c325ab6e49c6bd6c5de8803b11a6|security incident recovery update 6 withdrawals reopen for more assets 2026 11 03": {
@@ -125,6 +127,24 @@
       "telegram_chat_id": -1003754072182,
       "telegram_date": 1793998414,
       "recorded_at": "2026-11-06T20:53:34.650937+00:00"
+    },
+    "coinbase:0tlgts8cn5y8:mkk3dsfj7cq9": {
+      "source": "Coinbase Status",
+      "title": "Bank Payments Unavailable - INR (India)",
+      "relevance": "MEDIA",
+      "telegram_message_id": 821,
+      "telegram_chat_id": -1003754072182,
+      "telegram_date": 1794258004,
+      "recorded_at": "2026-11-09T21:00:04.516670+00:00"
+    },
+    "tech:OpenAI News:https://openai.com/index/chatgpt-enterprise-aws-marketplace": {
+      "source": "OpenAI News",
+      "title": "ChatGPT Enterprise now available in AWS Marketplace",
+      "relevance": "MEDIA",
+      "telegram_message_id": 822,
+      "telegram_chat_id": -1003754072182,
+      "telegram_date": 1794258005,
+      "recorded_at": "2026-11-09T21:00:05.921061+00:00"
     }
   },
   "alert_checked_ids": [
