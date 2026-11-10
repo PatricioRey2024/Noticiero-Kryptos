@@ -35,7 +35,8 @@
     "tech:OpenAI News:https://openai.com/index/australian-universities-ai-native-graduates",
     "tech:OpenAI News:https://openai.com/index/partnering-with-hacktron",
     "coinbase:0tlgts8cn5y8:mkk3dsfj7cq9",
-    "tech:OpenAI News:https://openai.com/index/chatgpt-enterprise-aws-marketplace"
+    "tech:OpenAI News:https://openai.com/index/chatgpt-enterprise-aws-marketplace",
+    "coinbase:0tlgts8cn5y8:049j1n1n9xj3"
   ],
   "published_messages": {
     "binance:https://www.binance.com/en/support/announcement/2d83c325ab6e49c6bd6c5de8803b11a6|security incident recovery update 6 withdrawals reopen for more assets 2026 11 03": {
@@ -145,6 +146,15 @@
       "telegram_chat_id": -1003754072182,
       "telegram_date": 1794258005,
       "recorded_at": "2026-11-09T21:00:05.921061+00:00"
+    },
+    "coinbase:0tlgts8cn5y8:049j1n1n9xj3": {
+      "source": "Coinbase Status",
+      "title": "Bank Payments Unavailable - INR (India)",
+      "relevance": "ALTA",
+      "telegram_message_id": 826,
+      "telegram_chat_id": -1003754072182,
+      "telegram_date": 1794306481,
+      "recorded_at": "2026-11-10T10:28:01.931362+00:00"
     }
   },
   "alert_checked_ids": [
@@ -162,6 +172,9 @@
     "coinbase:0tlgts8cn5y8:mkk3dsfj7cq9",
     "tech:OpenAI News:https://openai.com/index/chatgpt-enterprise-aws-marketplace",
     "federal_reserve:https://www.federalreserve.gov/newsevents/pressreleases/orders20261109a.htm",
-    "coinbase:wt72fdzhq79h:1q497jdhfhvx"
+    "coinbase:wt72fdzhq79h:1q497jdhfhvx",
+    "coinbase:0tlgts8cn5y8:049j1n1n9xj3",
+    "tech:OpenAI News:https://openai.com/index/closing-ai-guidance-gap-education",
+    "tech:Microsoft AI:https://www.microsoft.com/en-us/microsoft-cloud/blog/general/2026/11/09/introducing-frontier-accelerate-one-microsoft-path-to-expertise-investments-and-skills/"
   ]
 }
