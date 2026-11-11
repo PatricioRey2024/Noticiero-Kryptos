@@ -38,7 +38,10 @@
     "tech:OpenAI News:https://openai.com/index/chatgpt-enterprise-aws-marketplace",
     "coinbase:0tlgts8cn5y8:049j1n1n9xj3",
     "bls:https://www.bls.gov/news.release/archives/cpi_11102026.htm",
-    "tech:OpenAI News:https://openai.com/index/gilbert-tobin-sam-nickless"
+    "tech:OpenAI News:https://openai.com/index/gilbert-tobin-sam-nickless",
+    "federal_reserve:https://www.federalreserve.gov/newsevents/pressreleases/orders20261109a.htm",
+    "tech:Google AI:https://blog.google/innovation-and-ai/models-and-research/google-labs/tabletop/",
+    "tech:Microsoft AI:https://www.microsoft.com/en-us/microsoft-cloud/blog/general/2026/11/09/introducing-frontier-accelerate-one-microsoft-path-to-expertise-investments-and-skills/"
   ],
   "published_messages": {
     "binance:https://www.binance.com/en/support/announcement/2d83c325ab6e49c6bd6c5de8803b11a6|security incident recovery update 6 withdrawals reopen for more assets 2026 11 03": {
