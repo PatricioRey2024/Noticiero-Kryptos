@@ -41,7 +41,11 @@
     "tech:OpenAI News:https://openai.com/index/gilbert-tobin-sam-nickless",
     "federal_reserve:https://www.federalreserve.gov/newsevents/pressreleases/orders20261109a.htm",
     "tech:Google AI:https://blog.google/innovation-and-ai/models-and-research/google-labs/tabletop/",
-    "tech:Microsoft AI:https://www.microsoft.com/en-us/microsoft-cloud/blog/general/2026/11/09/introducing-frontier-accelerate-one-microsoft-path-to-expertise-investments-and-skills/"
+    "tech:Microsoft AI:https://www.microsoft.com/en-us/microsoft-cloud/blog/general/2026/11/09/introducing-frontier-accelerate-one-microsoft-path-to-expertise-investments-and-skills/",
+    "federal_reserve:https://www.federalreserve.gov/newsevents/pressreleases/other20261112a.htm",
+    "coinbase:jx3xg1gddhbm:157qpg5l2l6t",
+    "tech:OpenAI News:https://openai.com/index/introducing-chatgpt-wallet",
+    "tech:Google AI:https://blog.google/products-and-platforms/products/search/gemini-4-hydrogen-search-upgrade/"
   ],
   "published_messages": {
     "binance:https://www.binance.com/en/support/announcement/2d83c325ab6e49c6bd6c5de8803b11a6|security incident recovery update 6 withdrawals reopen for more assets 2026 11 03": {
@@ -169,6 +173,24 @@
       "telegram_chat_id": -1003754072182,
       "telegram_date": 1794334173,
       "recorded_at": "2026-11-10T18:09:33.253698+00:00"
+    },
+    "tech:OpenAI News:https://openai.com/index/introducing-chatgpt-wallet": {
+      "source": "OpenAI News",
+      "title": "Introducing ChatGPT Wallet",
+      "relevance": "MEDIA",
+      "telegram_message_id": 905,
+      "telegram_chat_id": -1003754072182,
+      "telegram_date": 1794592783,
+      "recorded_at": "2026-11-13T17:59:43.741852+00:00"
+    },
+    "tech:Google AI:https://blog.google/products-and-platforms/products/search/gemini-4-hydrogen-search-upgrade/": {
+      "source": "Google AI",
+      "title": "Google Search gets a major upgrade with Gemini 4 Hydrogen",
+      "relevance": "MEDIA",
+      "telegram_message_id": 906,
+      "telegram_chat_id": -1003754072182,
+      "telegram_date": 1794592785,
+      "recorded_at": "2026-11-13T17:59:45.493934+00:00"
     }
   },
   "alert_checked_ids": [
