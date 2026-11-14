@@ -45,7 +45,10 @@
     "federal_reserve:https://www.federalreserve.gov/newsevents/pressreleases/other20261112a.htm",
     "coinbase:jx3xg1gddhbm:157qpg5l2l6t",
     "tech:OpenAI News:https://openai.com/index/introducing-chatgpt-wallet",
-    "tech:Google AI:https://blog.google/products-and-platforms/products/search/gemini-4-hydrogen-search-upgrade/"
+    "tech:Google AI:https://blog.google/products-and-platforms/products/search/gemini-4-hydrogen-search-upgrade/",
+    "federal_reserve:https://www.federalreserve.gov/newsevents/pressreleases/bcreg20261113a.htm",
+    "binance:https://www.binance.com/en/support/announcement/432646a7f7c34c2a85b69db99af32c16|recovery update withdrawals reopened for more networks 2026 11 14",
+    "tech:Microsoft AI:https://blogs.microsoft.com/blog/2026/11/12/from-ai-ambition-to-business-impact/"
   ],
   "published_messages": {
     "binance:https://www.binance.com/en/support/announcement/2d83c325ab6e49c6bd6c5de8803b11a6|security incident recovery update 6 withdrawals reopen for more assets 2026 11 03": {
@@ -191,6 +194,24 @@
       "telegram_chat_id": -1003754072182,
       "telegram_date": 1794592785,
       "recorded_at": "2026-11-13T17:59:45.493934+00:00"
+    },
+    "federal_reserve:https://www.federalreserve.gov/newsevents/pressreleases/bcreg20261113a.htm": {
+      "source": "Federal Reserve",
+      "title": "Agencies extend comment period for proposed third-party risk management guidance",
+      "relevance": "MEDIA",
+      "telegram_message_id": 915,
+      "telegram_chat_id": -1003754072182,
+      "telegram_date": 1794674565,
+      "recorded_at": "2026-11-14T16:42:45.743978+00:00"
+    },
+    "binance:https://www.binance.com/en/support/announcement/432646a7f7c34c2a85b69db99af32c16|recovery update withdrawals reopened for more networks 2026 11 14": {
+      "source": "Binance",
+      "title": "Recovery Update: Withdrawals Reopened for More Networks (2026-11-14)",
+      "relevance": "MEDIA",
+      "telegram_message_id": 916,
+      "telegram_chat_id": -1003754072182,
+      "telegram_date": 1794674567,
+      "recorded_at": "2026-11-14T16:42:47.586794+00:00"
     }
   },
   "alert_checked_ids": [
