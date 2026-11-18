@@ -50,7 +50,8 @@
     "binance:https://www.binance.com/en/support/announcement/432646a7f7c34c2a85b69db99af32c16|recovery update withdrawals reopened for more networks 2026 11 14",
     "tech:Microsoft AI:https://blogs.microsoft.com/blog/2026/11/12/from-ai-ambition-to-business-impact/",
     "tech:OpenAI News:https://openai.com/index/expanding-chatgpt-for-academic-researchers",
-    "tech:Google AI:https://blog.google/products-and-platforms/products/maps/ask-maps-holiday-travel-features-2026/"
+    "tech:Google AI:https://blog.google/products-and-platforms/products/maps/ask-maps-holiday-travel-features-2026/",
+    "coinbase:0tlgts8cn5y8:f8973cc4qwfz"
   ],
   "published_messages": {
     "binance:https://www.binance.com/en/support/announcement/2d83c325ab6e49c6bd6c5de8803b11a6|security incident recovery update 6 withdrawals reopen for more assets 2026 11 03": {
@@ -214,6 +215,15 @@
       "telegram_chat_id": -1003754072182,
       "telegram_date": 1794674567,
       "recorded_at": "2026-11-14T16:42:47.586794+00:00"
+    },
+    "coinbase:0tlgts8cn5y8:f8973cc4qwfz": {
+      "source": "Coinbase Status",
+      "title": "Bank Payments Unavailable - INR (India)",
+      "relevance": "ALTA",
+      "telegram_message_id": 953,
+      "telegram_chat_id": -1003754072182,
+      "telegram_date": 1794964267,
+      "recorded_at": "2026-11-18T01:11:07.244360+00:00"
     }
   },
   "alert_checked_ids": [
@@ -258,6 +268,9 @@
     "tech:OpenAI News:https://openai.com/index/lvmh-media-division-partnership",
     "tech:Google AI:https://blog.google/products-and-platforms/products/maps/ask-maps-holiday-travel-features-2026/",
     "coinbase:3nlxfkfbhjgx:bm0668h30hfc",
-    "tech:OpenAI News:https://openai.com/index/strengthening-nato-allied-cyber-defences-ai"
+    "tech:OpenAI News:https://openai.com/index/strengthening-nato-allied-cyber-defences-ai",
+    "coinbase:0tlgts8cn5y8:f8973cc4qwfz",
+    "tech:OpenAI News:https://openai.com/index/introducing-gpt-6-2-astra-sol",
+    "tech:Google AI:https://blog.google/innovation-and-ai/products/gemini-app/tasks-in-gemini-free-new-features/"
   ]
 }
