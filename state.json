@@ -53,7 +53,8 @@
     "tech:Google AI:https://blog.google/products-and-platforms/products/maps/ask-maps-holiday-travel-features-2026/",
     "coinbase:0tlgts8cn5y8:f8973cc4qwfz",
     "tech:OpenAI News:https://openai.com/index/inside-the-codex-sandbox",
-    "tech:Google AI:https://blog.google/innovation-and-ai/products/gemini-app/gemini-lower-memory-devices/"
+    "tech:Google AI:https://blog.google/innovation-and-ai/products/gemini-app/gemini-lower-memory-devices/",
+    "federal_reserve:https://www.federalreserve.gov/newsevents/pressreleases/monetary20261118a.htm"
   ],
   "published_messages": {
     "binance:https://www.binance.com/en/support/announcement/2d83c325ab6e49c6bd6c5de8803b11a6|security incident recovery update 6 withdrawals reopen for more assets 2026 11 03": {
@@ -235,6 +236,15 @@
       "telegram_chat_id": -1003754072182,
       "telegram_date": 1795028399,
       "recorded_at": "2026-11-18T18:59:59.615646+00:00"
+    },
+    "federal_reserve:https://www.federalreserve.gov/newsevents/pressreleases/monetary20261118a.htm": {
+      "source": "Federal Reserve",
+      "title": "Minutes of the Federal Open Market Committee, October 27-28, 2026",
+      "relevance": "ALTA",
+      "telegram_message_id": 966,
+      "telegram_chat_id": -1003754072182,
+      "telegram_date": 1795045028,
+      "recorded_at": "2026-11-18T23:37:09.079948+00:00"
     }
   },
   "alert_checked_ids": [
@@ -284,6 +294,8 @@
     "tech:OpenAI News:https://openai.com/index/introducing-gpt-6-2-astra-sol",
     "tech:Google AI:https://blog.google/innovation-and-ai/products/gemini-app/tasks-in-gemini-free-new-features/",
     "tech:OpenAI News:https://openai.com/index/le-groupe-figaro-and-openai-announce-partnership",
-    "tech:Google AI:https://blog.google/innovation-and-ai/products/gemini-app/gemini-lower-memory-devices/"
+    "tech:Google AI:https://blog.google/innovation-and-ai/products/gemini-app/gemini-lower-memory-devices/",
+    "federal_reserve:https://www.federalreserve.gov/newsevents/pressreleases/monetary20261118a.htm",
+    "tech:OpenAI News:https://openai.com/index/the-silent-consensus"
   ]
 }
