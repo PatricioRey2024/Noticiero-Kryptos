@@ -51,7 +51,9 @@
     "tech:Microsoft AI:https://blogs.microsoft.com/blog/2026/11/12/from-ai-ambition-to-business-impact/",
     "tech:OpenAI News:https://openai.com/index/expanding-chatgpt-for-academic-researchers",
     "tech:Google AI:https://blog.google/products-and-platforms/products/maps/ask-maps-holiday-travel-features-2026/",
-    "coinbase:0tlgts8cn5y8:f8973cc4qwfz"
+    "coinbase:0tlgts8cn5y8:f8973cc4qwfz",
+    "tech:OpenAI News:https://openai.com/index/inside-the-codex-sandbox",
+    "tech:Google AI:https://blog.google/innovation-and-ai/products/gemini-app/gemini-lower-memory-devices/"
   ],
   "published_messages": {
     "binance:https://www.binance.com/en/support/announcement/2d83c325ab6e49c6bd6c5de8803b11a6|security incident recovery update 6 withdrawals reopen for more assets 2026 11 03": {
@@ -224,6 +226,15 @@
       "telegram_chat_id": -1003754072182,
       "telegram_date": 1794964267,
       "recorded_at": "2026-11-18T01:11:07.244360+00:00"
+    },
+    "tech:OpenAI News:https://openai.com/index/inside-the-codex-sandbox": {
+      "source": "OpenAI News",
+      "title": "Inside the Codex sandbox",
+      "relevance": "MEDIA",
+      "telegram_message_id": 963,
+      "telegram_chat_id": -1003754072182,
+      "telegram_date": 1795028399,
+      "recorded_at": "2026-11-18T18:59:59.615646+00:00"
     }
   },
   "alert_checked_ids": [
