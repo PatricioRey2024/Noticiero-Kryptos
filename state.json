@@ -57,7 +57,9 @@
     "federal_reserve:https://www.federalreserve.gov/newsevents/pressreleases/monetary20261118a.htm",
     "federal_reserve:https://www.federalreserve.gov/newsevents/pressreleases/enforcement20261119a.htm",
     "tech:OpenAI News:https://openai.com/index/how-openai-performance-factory-keeps-chatgpt-fast",
-    "tech:Google AI:https://blog.google/innovation-and-ai/technology/developers-tools/gemini-api-tool-retrieval/"
+    "tech:Google AI:https://blog.google/innovation-and-ai/technology/developers-tools/gemini-api-tool-retrieval/",
+    "federal_reserve:https://www.federalreserve.gov/newsevents/pressreleases/other20261120a.htm",
+    "coinbase:gt9nygt10ks5:wvgn6cq3mnmn"
   ],
   "published_messages": {
     "binance:https://www.binance.com/en/support/announcement/2d83c325ab6e49c6bd6c5de8803b11a6|security incident recovery update 6 withdrawals reopen for more assets 2026 11 03": {
@@ -257,6 +259,15 @@
       "telegram_chat_id": -1003754072182,
       "telegram_date": 1795115299,
       "recorded_at": "2026-11-19T19:08:19.902103+00:00"
+    },
+    "federal_reserve:https://www.federalreserve.gov/newsevents/pressreleases/other20261120a.htm": {
+      "source": "Federal Reserve",
+      "title": "Federal Reserve Board releases results from survey of senior financial officers at banks about their strategies and practices for managing reserve balances",
+      "relevance": "MEDIA",
+      "telegram_message_id": 992,
+      "telegram_chat_id": -1003754072182,
+      "telegram_date": 1795200343,
+      "recorded_at": "2026-11-20T18:45:43.552703+00:00"
     }
   },
   "alert_checked_ids": [
