@@ -59,7 +59,9 @@
     "tech:OpenAI News:https://openai.com/index/how-openai-performance-factory-keeps-chatgpt-fast",
     "tech:Google AI:https://blog.google/innovation-and-ai/technology/developers-tools/gemini-api-tool-retrieval/",
     "federal_reserve:https://www.federalreserve.gov/newsevents/pressreleases/other20261120a.htm",
-    "coinbase:gt9nygt10ks5:wvgn6cq3mnmn"
+    "coinbase:gt9nygt10ks5:wvgn6cq3mnmn",
+    "federal_reserve:https://www.federalreserve.gov/newsevents/pressreleases/other20261120b.htm",
+    "tech:OpenAI News:https://openai.com/index/combatting-adversarial-distillation"
   ],
   "published_messages": {
     "binance:https://www.binance.com/en/support/announcement/2d83c325ab6e49c6bd6c5de8803b11a6|security incident recovery update 6 withdrawals reopen for more assets 2026 11 03": {
@@ -268,6 +270,15 @@
       "telegram_chat_id": -1003754072182,
       "telegram_date": 1795200343,
       "recorded_at": "2026-11-20T18:45:43.552703+00:00"
+    },
+    "tech:OpenAI News:https://openai.com/index/combatting-adversarial-distillation": {
+      "source": "OpenAI News",
+      "title": "Combatting adversarial distillation",
+      "relevance": "MEDIA",
+      "telegram_message_id": 998,
+      "telegram_chat_id": -1003754072182,
+      "telegram_date": 1795283093,
+      "recorded_at": "2026-11-21T17:44:53.230296+00:00"
     }
   },
   "alert_checked_ids": [
