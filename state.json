@@ -62,7 +62,9 @@
     "coinbase:gt9nygt10ks5:wvgn6cq3mnmn",
     "federal_reserve:https://www.federalreserve.gov/newsevents/pressreleases/other20261120b.htm",
     "tech:OpenAI News:https://openai.com/index/combatting-adversarial-distillation",
-    "tech:OpenAI News:https://openai.com/index/perplexity-and-intelligence"
+    "tech:OpenAI News:https://openai.com/index/perplexity-and-intelligence",
+    "tech:OpenAI News:https://openai.com/business/learn/connected-intelligence-for-in-house-legal",
+    "tech:Google AI:https://blog.google/products-and-platforms/products/search/google-search-personal-intelligence-apps/"
   ],
   "published_messages": {
     "binance:https://www.binance.com/en/support/announcement/2d83c325ab6e49c6bd6c5de8803b11a6|security incident recovery update 6 withdrawals reopen for more assets 2026 11 03": {
@@ -280,6 +282,15 @@
       "telegram_chat_id": -1003754072182,
       "telegram_date": 1795283093,
       "recorded_at": "2026-11-21T17:44:53.230296+00:00"
+    },
+    "tech:Google AI:https://blog.google/products-and-platforms/products/search/google-search-personal-intelligence-apps/": {
+      "source": "Google AI",
+      "title": "A more tailored Google Search that’s uniquely yours",
+      "relevance": "MEDIA",
+      "telegram_message_id": 1012,
+      "telegram_chat_id": -1003754072182,
+      "telegram_date": 1795471937,
+      "recorded_at": "2026-11-23T22:12:17.672733+00:00"
     }
   },
   "alert_checked_ids": [
