@@ -67,7 +67,9 @@
     "tech:Google AI:https://blog.google/products-and-platforms/products/search/google-search-personal-intelligence-apps/",
     "federal_reserve:https://www.federalreserve.gov/newsevents/pressreleases/monetary20261124a.htm",
     "tech:OpenAI News:https://openai.com/index/searching-for-distant-planets-with-astra",
-    "tech:Google AI:https://blog.google/products-and-platforms/products/gemini/gemini-golden-state/"
+    "tech:Google AI:https://blog.google/products-and-platforms/products/gemini/gemini-golden-state/",
+    "federal_reserve:https://www.federalreserve.gov/newsevents/pressreleases/bcreg20261125b.htm",
+    "tech:OpenAI News:https://openai.com/index/gpt-6-models-demonstrate-intrinsic-protein-design-capabilities"
   ],
   "published_messages": {
     "binance:https://www.binance.com/en/support/announcement/2d83c325ab6e49c6bd6c5de8803b11a6|security incident recovery update 6 withdrawals reopen for more assets 2026 11 03": {
@@ -303,6 +305,15 @@
       "telegram_chat_id": -1003754072182,
       "telegram_date": 1795553307,
       "recorded_at": "2026-11-24T20:48:28.216785+00:00"
+    },
+    "tech:OpenAI News:https://openai.com/index/gpt-6-models-demonstrate-intrinsic-protein-design-capabilities": {
+      "source": "OpenAI News",
+      "title": "GPT-6 models demonstrate intrinsic protein-design capabilities",
+      "relevance": "MEDIA",
+      "telegram_message_id": 1036,
+      "telegram_chat_id": -1003754072182,
+      "telegram_date": 1795637166,
+      "recorded_at": "2026-11-25T20:06:06.196778+00:00"
     }
   },
   "alert_checked_ids": [
