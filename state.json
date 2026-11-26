@@ -69,7 +69,8 @@
     "tech:OpenAI News:https://openai.com/index/searching-for-distant-planets-with-astra",
     "tech:Google AI:https://blog.google/products-and-platforms/products/gemini/gemini-golden-state/",
     "federal_reserve:https://www.federalreserve.gov/newsevents/pressreleases/bcreg20261125b.htm",
-    "tech:OpenAI News:https://openai.com/index/gpt-6-models-demonstrate-intrinsic-protein-design-capabilities"
+    "tech:OpenAI News:https://openai.com/index/gpt-6-models-demonstrate-intrinsic-protein-design-capabilities",
+    "binance:https://www.binance.com/en/support/announcement/95c463396a034f1ab3994814225e6d69|service recovery update withdrawals recovery work complete 2026 11 26"
   ],
   "published_messages": {
     "binance:https://www.binance.com/en/support/announcement/2d83c325ab6e49c6bd6c5de8803b11a6|security incident recovery update 6 withdrawals reopen for more assets 2026 11 03": {
@@ -314,6 +315,15 @@
       "telegram_chat_id": -1003754072182,
       "telegram_date": 1795637166,
       "recorded_at": "2026-11-25T20:06:06.196778+00:00"
+    },
+    "binance:https://www.binance.com/en/support/announcement/95c463396a034f1ab3994814225e6d69|service recovery update withdrawals recovery work complete 2026 11 26": {
+      "source": "Binance",
+      "title": "Service Recovery Update: Withdrawals Recovery Work Complete (2026-11-26)",
+      "relevance": "MEDIA",
+      "telegram_message_id": 1040,
+      "telegram_chat_id": -1003754072182,
+      "telegram_date": 1795722403,
+      "recorded_at": "2026-11-26T19:46:43.936178+00:00"
     }
   },
   "alert_checked_ids": [
